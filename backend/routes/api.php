@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\V1\BuildingController;
 use App\Http\Controllers\Api\V1\CandidateController;
+use App\Http\Controllers\Api\V1\LayoutController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use Illuminate\Support\Facades\Route;
@@ -15,6 +17,12 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/projects/{projectId}/candidates', [CandidateController::class, 'index']);
     Route::post('/projects/{projectId}/select-candidate', [CandidateController::class, 'select']);
+
+    Route::post('/projects/{projectId}/analyze-building', [BuildingController::class, 'analyze']);
+    Route::get('/projects/{projectId}/analysis', [BuildingController::class, 'show']);
+
+    Route::post('/projects/{projectId}/generate-layout', [LayoutController::class, 'generate']);
+    Route::get('/projects/{projectId}/layout', [LayoutController::class, 'show']);
 
     Route::get('/settings', [SettingsController::class, 'index']);
     Route::post('/settings', [SettingsController::class, 'update']);

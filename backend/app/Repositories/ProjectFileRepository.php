@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
+use App\DTOs\BuildingInsights;
 use App\DTOs\Candidate;
 use App\DTOs\NormalizedQuery;
 use App\DTOs\ProjectInput;
+use App\DTOs\RoofLayout;
+use App\DTOs\SegmentLayout;
+use App\DTOs\SolarAnalysis;
 use App\Support\ProjectPaths;
 use App\Support\TextKv;
 use Illuminate\Contracts\Filesystem\Filesystem;
@@ -203,6 +207,120 @@ final class ProjectFileRepository
             confidence: (float)($data['confidence'] ?? 0),
             solarSupported: (bool)($data['solar_supported'] ?? false),
             notes: (string)($data['notes'] ?? ''),
+        );
+    }
+
+    // --- Phase 2 helpers -----------------------------------------------------
+
+    public function saveBuildingInsights(string $projectId, Candidate $candidate, BuildingInsights $insights): void
+    {
+        $this->writeJson($projectId, 'building/building_insights.json', $insights->toArray());
+
+        $summary = [
+            'project_id' => $projectId,
+            'candidate_address' => $candidate->formattedAddress,
+            'imagery_quality' => $insights->imageryQuality,
+            'imagery_date' => $insights->imageryDate,
+            'whole_roof_area_m2' => $insights->wholeRoofAreaM2,
+            'ground_area_m2' => $insights->groundAreaM2,
+            'max_sunshine_hours_per_year' => $insights->maxSunshineHoursPerYear,
+            'solar_potential_max_panels' => $insights->solarPotentialMaxPanels,
+            'segment_count' => count($insights->segments),
+        ];
+        $this->writeText($projectId, 'building/building_summary.txt', TextKv::render($summary));
+
+        $lines = ['# roof_segments: '.count($insights->segments)];
+        foreach ($insights->segments as $s) {
+            $lines[] = sprintf(
+                'segment_%02d: area=%.2fm² pitch=%.1f° azimuth=%.1f° w=%.2fm h=%.2fm sun=%.0fh shade=%.2f',
+                $s->index, $s->areaM2, $s->pitchDegrees, $s->azimuthDegrees,
+                $s->widthM, $s->heightM, $s->sunshineHoursPerYear, $s->shadePenalty,
+            );
+        }
+        $this->writeText($projectId, 'building/roof_segments.txt', implode("\n", $lines)."\n");
+    }
+
+    public function readBuildingInsights(string $projectId): ?BuildingInsights
+    {
+        $data = $this->readJson($projectId, 'building/building_insights.json');
+        return $data === null ? null : BuildingInsights::fromArray($data);
+    }
+
+    public function saveSolarAnalysis(string $projectId, SolarAnalysis $analysis): void
+    {
+        $this->writeJson($projectId, 'solar/solar_analysis.json', $analysis->toArray());
+        $this->writeText($projectId, 'solar/solar_analysis.txt', TextKv::render($analysis->toArray()));
+    }
+
+    public function readSolarAnalysis(string $projectId): ?SolarAnalysis
+    {
+        $data = $this->readJson($projectId, 'solar/solar_analysis.json');
+        return $data === null ? null : SolarAnalysis::fromArray($data);
+    }
+
+    public function saveLayout(string $projectId, RoofLayout $layout): void
+    {
+        $this->writeJson($projectId, 'layout/layout.json', $layout->toArray());
+        $this->writeText($projectId, 'layout/layout_summary.txt', TextKv::render([
+            'total_panels' => $layout->totalPanels,
+            'total_kwp' => $layout->totalKwp,
+            'annual_kwh' => $layout->annualKwh,
+            'panel_width_m' => $layout->panelWidthM,
+            'panel_height_m' => $layout->panelHeightM,
+            'panel_watt_peak' => $layout->panelWattPeak,
+            'setback_m' => $layout->setbackM,
+            'aesthetic_score' => $layout->aestheticScore,
+            'segment_count' => count($layout->segments),
+        ]));
+
+        $coords = ['# panel_coordinates (segment-local meters, origin at SW corner)'];
+        foreach ($layout->allPanels() as $p) {
+            $coords[] = sprintf(
+                'panel_%03d: segment=%d x=%.3f y=%.3f w=%.3f h=%.3f orientation=%s',
+                $p->index, $p->segmentIndex, $p->x, $p->y, $p->width, $p->height, $p->orientation,
+            );
+        }
+        $this->writeText($projectId, 'layout/panel_coordinates.txt', implode("\n", $coords)."\n");
+
+        $debug = ['# per-segment layout decisions'];
+        foreach ($layout->segments as $s) {
+            $debug[] = sprintf(
+                'segment_%02d: orientation=%s rows=%d cols=%d panels=%d annual_kwh=%.1f used_area_m2=%.2f',
+                $s->segmentIndex, $s->orientation, $s->rows, $s->cols,
+                $s->panelCount(), $s->annualKwh, $s->usedAreaM2,
+            );
+        }
+        $this->writeText($projectId, 'layout/layout_debug.txt', implode("\n", $debug)."\n");
+    }
+
+    public function readLayout(string $projectId): ?RoofLayout
+    {
+        $data = $this->readJson($projectId, 'layout/layout.json');
+        if ($data === null) {
+            return null;
+        }
+        $segments = [];
+        foreach ((array)($data['segments'] ?? []) as $s) {
+            $segments[] = new SegmentLayout(
+                segmentIndex: (int)($s['segment'] ?? 0),
+                orientation: (string)($s['orientation'] ?? 'portrait'),
+                rows: (int)($s['rows'] ?? 0),
+                cols: (int)($s['cols'] ?? 0),
+                panels: [],
+                annualKwh: (float)($s['annual_kwh'] ?? 0),
+                usedAreaM2: (float)($s['used_area_m2'] ?? 0),
+            );
+        }
+        return new RoofLayout(
+            segments: $segments,
+            panelWidthM: (float)($data['panel_width_m'] ?? 0),
+            panelHeightM: (float)($data['panel_height_m'] ?? 0),
+            panelWattPeak: (int)($data['panel_watt_peak'] ?? 0),
+            setbackM: (float)($data['setback_m'] ?? 0),
+            totalPanels: (int)($data['total_panels'] ?? 0),
+            totalKwp: (float)($data['total_kwp'] ?? 0),
+            annualKwh: (float)($data['annual_kwh'] ?? 0),
+            aestheticScore: (float)($data['aesthetic_score'] ?? 0),
         );
     }
 }

@@ -10,7 +10,7 @@ has tests.
 | Phase | Scope                                                   | Status |
 | ----: | ------------------------------------------------------- | :----: |
 |   1   | Laravel 11 skeleton, filesystem persistence, status tracking, street search & candidate discovery | done |
-|   2   | Solar analysis + deterministic panel layout engine      | todo |
+|   2   | Solar analysis + deterministic panel layout engine      | done |
 |   3   | Roof overlay rendering + Gemini enhancement             | todo |
 |   4   | Pricing engine + HTML/PDF proposal generator            | todo |
 |   5   | Vue 3 SPA (search → street → building → proposal)       | todo |
@@ -66,8 +66,27 @@ API (Phase 1 subset):
 |    GET | `/api/v1/projects/{id}/status`                      | current status, progress, errors |
 |    GET | `/api/v1/projects/{id}/candidates`                  | list candidates                  |
 |   POST | `/api/v1/projects/{id}/select-candidate`            | choose candidate by index        |
+|   POST | `/api/v1/projects/{id}/analyze-building`            | Solar API insights + data layers |
+|    GET | `/api/v1/projects/{id}/analysis`                    | parsed solar analysis summary    |
+|   POST | `/api/v1/projects/{id}/generate-layout`             | deterministic panel layout       |
+|    GET | `/api/v1/projects/{id}/layout`                      | layout summary + coordinates     |
 |    GET | `/api/v1/settings`                                  | read editable config             |
 |   POST | `/api/v1/settings`                                  | update a config section          |
+
+### Solar analysis and layout engine (Phase 2)
+
+- `SolarApiServiceInterface` — real `GoogleSolarApiService` hits Building
+  Insights + Data Layers; `FakeSolarApiService` derives a deterministic roof
+  geometry (2–4 segments with pitch, azimuth, sunshine hours, shading) from
+  a hash of the selected candidate so results are reproducible offline.
+- `RoofLayoutService` is pure geometry: it fits rectangular panels per
+  segment in both portrait and landscape, applies configurable setbacks +
+  row/column gaps, picks the orientation with the most panels (tiebreak on
+  annual kWh) and returns segment-local `(x, y, w, h)` coordinates plus
+  totals.
+- Every step writes human-readable `.txt` summaries alongside `.json`
+  sidecars so the downstream renderer / proposal engine can reload the
+  layout without re-calling any service.
 
 ## Getting started
 
