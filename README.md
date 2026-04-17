@@ -13,13 +13,16 @@ has tests.
 |   2   | Solar analysis + deterministic panel layout engine      | done |
 |   3   | Roof overlay rendering + Gemini enhancement             | done |
 |   4   | Pricing engine + HTML/PDF proposal generator            | done |
-|   5   | Vue 3 SPA (search → street → building → proposal)       | todo |
+|   5   | Vue 3 SPA (search → street → building → proposal)       | done |
 |   6   | Docker Compose + end-to-end tests + finalised README    | todo |
 
 ## Architecture
 
 - **Backend:** PHP 8.3+ / Laravel 11, clean layering (controllers → form
   requests → services → repositories → DTOs).
+- **Frontend:** Vue 3 (Composition API) + Vite + Pinia + Vue Router + Tailwind.
+  Four-step funnel (search → candidates → building → proposal) with an
+  editable Settings page. Dev server proxies `/api` to the Laravel backend.
 - **Persistence:** local filesystem only. Every project lives under
   `backend/storage/app/projects/{project_id}/`. Every step writes a human-
   readable `.txt` summary plus a `.json` sidecar for round-tripping.
@@ -103,6 +106,37 @@ API (Phase 1 subset):
 - AI is not consulted in Phase 4 — every number comes from deterministic
   services so proposals are reproducible and auditable.
 
+### Vue 3 SPA (Phase 5)
+
+```
+frontend/
+  index.html, vite.config.js, tailwind.config.js
+  src/
+    main.js                     # app bootstrap (Pinia + Router)
+    router/                     # 5 lazy-loaded routes
+    stores/
+      project.js                # state for the search → proposal funnel
+      settings.js               # editable config sections
+    services/api.js             # axios client + typed helpers per endpoint
+    components/
+      AppHeader.vue, StatusPill.vue, ProgressSteps.vue,
+      LoadingButton.vue, ErrorBanner.vue
+    views/
+      SearchView.vue            # address form + recent projects
+      CandidatesView.vue        # pick a building
+      BuildingView.vue          # analysis + layout + render
+      ProposalView.vue          # pricing + proposal + inline HTML preview + PDF
+      SettingsView.vue          # edit panel/pricing/savings/branding sections
+      NotFoundView.vue
+```
+
+- Dev server runs at `http://localhost:5173` and proxies `/api/*` to the
+  Laravel backend. Override via `VITE_API_PROXY` in `frontend/.env`.
+- Status pill + progress steps reflect the backend pipeline state so sales
+  users always see where the project is.
+- Proposal view embeds the generated HTML via `<iframe srcdoc>` and offers a
+  one-click PDF download.
+
 ### Rendering pipeline (Phase 3)
 
 - `RenderingService` produces three PNGs from the stored layout, all using
@@ -138,15 +172,27 @@ API (Phase 1 subset):
 
 ## Getting started
 
+Backend:
+
 ```bash
 cd backend
 cp .env.example .env            # FAKE_PROVIDERS=true by default
 composer install
 php artisan key:generate
-php artisan serve
+php artisan serve               # http://127.0.0.1:8000
 ```
 
-Smoke test:
+Frontend (in a second terminal):
+
+```bash
+cd frontend
+npm install
+npm run dev                     # http://localhost:5173
+```
+
+Then open `http://localhost:5173/` and drive the full flow from the UI.
+
+API-only smoke test:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/api/v1/projects \
