@@ -12,7 +12,7 @@ has tests.
 |   1   | Laravel 11 skeleton, filesystem persistence, status tracking, street search & candidate discovery | done |
 |   2   | Solar analysis + deterministic panel layout engine      | done |
 |   3   | Roof overlay rendering + Gemini enhancement             | done |
-|   4   | Pricing engine + HTML/PDF proposal generator            | todo |
+|   4   | Pricing engine + HTML/PDF proposal generator            | done |
 |   5   | Vue 3 SPA (search → street → building → proposal)       | todo |
 |   6   | Docker Compose + end-to-end tests + finalised README    | todo |
 
@@ -73,8 +73,35 @@ API (Phase 1 subset):
 |   POST | `/api/v1/projects/{id}/generate-render`             | base + overlay + Gemini render   |
 |    GET | `/api/v1/projects/{id}/render`                      | render notes + prompt + paths    |
 |    GET | `/api/v1/projects/{id}/render/images/{name}`        | stream PNG (base/overlay/render) |
+|   POST | `/api/v1/projects/{id}/generate-pricing`            | deterministic pricing breakdown  |
+|    GET | `/api/v1/projects/{id}/pricing`                     | read pricing breakdown           |
+|   POST | `/api/v1/projects/{id}/generate-proposal`           | savings + HTML + PDF proposal    |
+|    GET | `/api/v1/projects/{id}/proposal`                    | proposal summary (JSON)          |
+|    GET | `/api/v1/projects/{id}/proposal/html`               | branded HTML proposal            |
+|    GET | `/api/v1/projects/{id}/proposal/pdf`                | standalone PDF proposal          |
 |    GET | `/api/v1/settings`                                  | read editable config             |
 |   POST | `/api/v1/settings`                                  | update a config section          |
+
+### Pricing, savings and proposal (Phase 4)
+
+- `PricingService` reads the editable `pricing` section plus the stored roof
+  layout and emits an itemised breakdown (modules, inverter + DC wiring,
+  mounting, labour, BoS) with configurable margin, discount and VAT. Output
+  lands in `pricing/pricing_breakdown.{txt,json}` + `pricing/assumptions.txt`.
+- `SavingsService` builds a 25-year cash-flow forecast: 0.5%/yr panel
+  degradation, configurable self-consumption ratio, grid + export tariffs
+  with annual inflation, payback computed by linear interpolation within the
+  crossover year.
+- `ProposalService` stitches building insights + analysis + layout + pricing
+  + savings + branding into a `ProposalSummary`, renders
+  `resources/views/proposal/proposal.blade.php`, and writes a standalone
+  `proposal.pdf`. HTML embeds the final roof render as a base64 data URI so
+  the file is self-contained.
+- `App\Support\MinimalPdf` is a zero-dependency PDF 1.4 writer (built-in
+  Helvetica + Helvetica-Bold, auto page-breaks, titles, key/value rows and
+  ruled tables). The MVP has no runtime dependency on dompdf/mPDF.
+- AI is not consulted in Phase 4 — every number comes from deterministic
+  services so proposals are reproducible and auditable.
 
 ### Rendering pipeline (Phase 3)
 
@@ -139,7 +166,7 @@ cd backend
 php artisan test
 ```
 
-Current suite: 14 tests, 61 assertions.
+Current suite: 34 tests, 259 assertions (Phase 1–4).
 
 ## Environment
 
