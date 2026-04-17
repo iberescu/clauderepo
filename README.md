@@ -14,7 +14,7 @@ has tests.
 |   3   | Roof overlay rendering + Gemini enhancement             | done |
 |   4   | Pricing engine + HTML/PDF proposal generator            | done |
 |   5   | Vue 3 SPA (search → street → building → proposal)       | done |
-|   6   | Docker Compose + end-to-end tests + finalised README    | todo |
+|   6   | Docker Compose + end-to-end tests + finalised README    | done |
 
 ## Architecture
 
@@ -170,7 +170,55 @@ frontend/
   sidecars so the downstream renderer / proposal engine can reload the
   layout without re-calling any service.
 
+### Docker Compose + e2e (Phase 6)
+
+Two-service stack that runs the whole flow with one command. Both images are
+built locally from the per-service Dockerfiles — no external registry needed.
+
+```
+docker-compose.yml               # backend + frontend services, shared volume
+backend/Dockerfile               # PHP 8.3 CLI + GD + composer + artisan serve
+backend/docker/entrypoint.sh     # seeds .env, generates APP_KEY on first boot
+backend/.dockerignore            # keeps vendor/ and runtime artefacts out of the image
+frontend/Dockerfile              # Node 20 + Vite dev server on :5173
+frontend/.dockerignore
+```
+
+- `backend` exposes `:8000` and runs `php artisan serve`. A named volume
+  (`backend-storage`) is mounted at `/app/storage/app` so generated projects
+  and editable config survive container restarts.
+- `frontend` exposes `:5173`, runs `vite --host 0.0.0.0`, and receives
+  `VITE_API_PROXY=http://backend:8000` so `/api/*` is proxied to the backend
+  via the compose network alias.
+- Backend has a `healthcheck` that pings `/api/v1/health`; frontend waits for
+  the backend to report healthy before starting.
+- The stack defaults to `FAKE_PROVIDERS=true` so it runs fully offline. To
+  exercise the real Google Maps / Solar API / Gemini providers, export the
+  three keys and flip the flag before `docker compose up`.
+
+The end-to-end test `backend/tests/Feature/EndToEndFlowTest.php` walks a
+single project through every endpoint in the order the UI drives them:
+`POST /projects` → `select-candidate` → `analyze-building` → `generate-layout`
+→ `generate-render` → `generate-pricing` → `generate-proposal`. It asserts
+(a) every status transition (`candidates_ready` … `proposal_ready`),
+(b) each artefact listed in the spec lands on disk (input, candidates,
+building, solar, layout, render PNGs, pricing, savings, proposal HTML+PDF),
+and (c) the `proposal/html` and `proposal/pdf` endpoints stream the expected
+content (with correct `%PDF-1.4` magic bytes and `%%EOF` marker).
+
 ## Getting started
+
+### Option A — Docker Compose (recommended)
+
+```bash
+docker compose up --build        # backend :8000, frontend :5173
+```
+
+Then open `http://localhost:5173/`. `Ctrl+C` stops the stack; the
+`backend-storage` volume keeps generated projects for the next run (use
+`docker compose down -v` to wipe it).
+
+### Option B — local toolchain
 
 Backend:
 
@@ -212,7 +260,15 @@ cd backend
 php artisan test
 ```
 
-Current suite: 34 tests, 259 assertions (Phase 1–4).
+Current suite: 35 tests, 354 assertions (Phase 1–6). The Phase 6
+`EndToEndFlowTest` alone contributes 95 assertions covering the full
+address-to-proposal funnel.
+
+Run the e2e test inside the built backend image without the Vite service:
+
+```bash
+docker compose run --rm backend php artisan test --filter=EndToEndFlowTest
+```
 
 ## Environment
 

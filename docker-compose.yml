@@ -1,0 +1,56 @@
+# Solar Proposal MVP — single command to run the whole stack.
+#
+#   docker compose up --build
+#
+# Backend (Laravel) listens on :8000, frontend (Vite) on :5173. The frontend
+# proxies /api to the backend service via its Docker network alias, so no
+# host-side DNS tricks are needed.
+#
+# With FAKE_PROVIDERS=true the stack runs end-to-end offline. To exercise the
+# real Google Maps / Solar API / Gemini providers, export the three keys in
+# your shell and set FAKE_PROVIDERS=false before starting the stack.
+
+services:
+  backend:
+    build:
+      context: ./backend
+    image: solar-proposal-backend:dev
+    container_name: solar-proposal-backend
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      FRONTEND_URL: http://localhost:5173
+      FAKE_PROVIDERS: "${FAKE_PROVIDERS:-true}"
+      GOOGLE_MAPS_API_KEY: "${GOOGLE_MAPS_API_KEY:-}"
+      GOOGLE_SOLAR_API_KEY: "${GOOGLE_SOLAR_API_KEY:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist generated project artefacts + editable config across restarts.
+      - backend-storage:/app/storage/app
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8000/api/v1/health') === false ? 1 : 0);"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+    image: solar-proposal-frontend:dev
+    container_name: solar-proposal-frontend
+    environment:
+      # Vite reads VITE_API_PROXY at dev-server start. Inside the compose
+      # network the backend is reachable as "backend:8000".
+      VITE_API_PROXY: http://backend:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  backend-storage:

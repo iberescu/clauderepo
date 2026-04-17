@@ -1,0 +1,45 @@
+# Solar Proposal MVP backend — Laravel 11 on PHP 8.3.
+#
+# The MVP is file-backed (no DB, no queue), so a single PHP container running
+# `php artisan serve` is enough. GD is required by the rendering pipeline that
+# writes roof_base.png / roof_overlay.png.
+
+FROM php:8.3-cli-alpine
+
+RUN apk add --no-cache \
+        git \
+        unzip \
+        libzip-dev \
+        libpng-dev \
+        libjpeg-turbo-dev \
+        freetype-dev \
+        oniguruma-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) gd zip pdo pdo_mysql mbstring bcmath
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
+
+# Install dependencies first so the vendor layer is cached across source edits.
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --no-interaction --prefer-dist \
+    && composer clear-cache
+
+COPY . .
+
+# Finish the composer post-install hooks now that the full app tree is present,
+# and make sure the storage + bootstrap cache dirs are writable at runtime.
+RUN composer dump-autoload --optimize --no-dev \
+    && mkdir -p storage/app/projects storage/app/config storage/framework/cache/data storage/framework/sessions storage/framework/views bootstrap/cache \
+    && chmod -R 0777 storage bootstrap/cache
+
+EXPOSE 8000
+
+# docker-entrypoint.sh copies .env.example if missing and generates an app key
+# before starting artisan serve, so the container is self-contained.
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
