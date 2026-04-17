@@ -75,6 +75,18 @@ final class ProjectFileRepository
         return $this->disk()->exists($full) ? (string) $this->disk()->get($full) : null;
     }
 
+    public function writeBinary(string $projectId, string $relative, string $bytes): void
+    {
+        $full = (new ProjectPaths($projectId))->root().'/'.$relative;
+        $this->disk()->put($full, $bytes);
+    }
+
+    public function readBinary(string $projectId, string $relative): ?string
+    {
+        $full = (new ProjectPaths($projectId))->root().'/'.$relative;
+        return $this->disk()->exists($full) ? (string) $this->disk()->get($full) : null;
+    }
+
     public function writeJson(string $projectId, string $relative, mixed $data): void
     {
         $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -295,18 +307,35 @@ final class ProjectFileRepository
 
     public function readLayout(string $projectId): ?RoofLayout
     {
+        return $this->readFullLayout($projectId);
+    }
+
+    public function readFullLayout(string $projectId): ?RoofLayout
+    {
         $data = $this->readJson($projectId, 'layout/layout.json');
         if ($data === null) {
             return null;
         }
         $segments = [];
         foreach ((array)($data['segments'] ?? []) as $s) {
+            $panels = [];
+            foreach ((array)($s['panels'] ?? []) as $p) {
+                $panels[] = new \App\DTOs\PanelPlacement(
+                    index: (int)($p['index'] ?? 0),
+                    segmentIndex: (int)($p['segment'] ?? 0),
+                    x: (float)($p['x'] ?? 0),
+                    y: (float)($p['y'] ?? 0),
+                    width: (float)($p['w'] ?? 0),
+                    height: (float)($p['h'] ?? 0),
+                    orientation: (string)($p['orientation'] ?? 'portrait'),
+                );
+            }
             $segments[] = new SegmentLayout(
                 segmentIndex: (int)($s['segment'] ?? 0),
                 orientation: (string)($s['orientation'] ?? 'portrait'),
                 rows: (int)($s['rows'] ?? 0),
                 cols: (int)($s['cols'] ?? 0),
-                panels: [],
+                panels: $panels,
                 annualKwh: (float)($s['annual_kwh'] ?? 0),
                 usedAreaM2: (float)($s['used_area_m2'] ?? 0),
             );

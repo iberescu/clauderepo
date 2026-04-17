@@ -11,7 +11,7 @@ has tests.
 | ----: | ------------------------------------------------------- | :----: |
 |   1   | Laravel 11 skeleton, filesystem persistence, status tracking, street search & candidate discovery | done |
 |   2   | Solar analysis + deterministic panel layout engine      | done |
-|   3   | Roof overlay rendering + Gemini enhancement             | todo |
+|   3   | Roof overlay rendering + Gemini enhancement             | done |
 |   4   | Pricing engine + HTML/PDF proposal generator            | todo |
 |   5   | Vue 3 SPA (search → street → building → proposal)       | todo |
 |   6   | Docker Compose + end-to-end tests + finalised README    | todo |
@@ -70,8 +70,29 @@ API (Phase 1 subset):
 |    GET | `/api/v1/projects/{id}/analysis`                    | parsed solar analysis summary    |
 |   POST | `/api/v1/projects/{id}/generate-layout`             | deterministic panel layout       |
 |    GET | `/api/v1/projects/{id}/layout`                      | layout summary + coordinates     |
+|   POST | `/api/v1/projects/{id}/generate-render`             | base + overlay + Gemini render   |
+|    GET | `/api/v1/projects/{id}/render`                      | render notes + prompt + paths    |
+|    GET | `/api/v1/projects/{id}/render/images/{name}`        | stream PNG (base/overlay/render) |
 |    GET | `/api/v1/settings`                                  | read editable config             |
 |   POST | `/api/v1/settings`                                  | update a config section          |
+
+### Rendering pipeline (Phase 3)
+
+- `RenderingService` produces three PNGs from the stored layout, all using
+  the exact panel coordinates from `layout/panel_coordinates.txt`:
+  - `render/roof_base.png` — clean top-down roof plates, grid + labels
+  - `render/roof_overlay.png` — same base with deterministic panel rectangles
+    drawn on top (this is the mask handed to the AI)
+  - `render/roof_render.png` — photorealistic version returned by Gemini
+- `GeminiImageServiceInterface` has a real client
+  (`GoogleGeminiImageService`, calls `models/gemini-2.5-flash-image:generateContent`)
+  and a deterministic fake (`FakeGeminiImageService`) that applies a
+  brightness/contrast/gradient/vignette treatment so the downstream proposal
+  always has a plausible render, even offline.
+- AI never touches geometry. If Gemini fails, the overlay is saved as the
+  render and the error is recorded in `render/render_notes.txt`.
+- Prompt is stored verbatim in `render/gemini_prompt.txt` so proposals stay
+  reproducible.
 
 ### Solar analysis and layout engine (Phase 2)
 

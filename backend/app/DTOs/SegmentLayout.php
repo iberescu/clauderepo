@@ -38,6 +38,7 @@ final class SegmentLayout
             'panel_count' => $this->panelCount(),
             'annual_kwh' => $this->annualKwh,
             'used_area_m2' => $this->usedAreaM2,
+            'panels' => array_map(fn (PanelPlacement $p) => $p->toArray(), $this->panels),
         ];
     }
 }
