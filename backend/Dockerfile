@@ -1,10 +1,12 @@
-# Solar Proposal MVP backend — Laravel 11 on PHP 8.3.
+# Solar Proposal MVP backend — Laravel 11 on PHP 8.4.
 #
 # The MVP is file-backed (no DB, no queue), so a single PHP container running
 # `php artisan serve` is enough. GD is required by the rendering pipeline that
-# writes roof_base.png / roof_overlay.png.
+# writes roof_base.png / roof_overlay.png. PHP 8.4 is required because the
+# committed composer.lock resolves several symfony/* packages at v8.0.x which
+# hard-require PHP >= 8.4.
 
-FROM php:8.3-cli-alpine
+FROM php:8.4-cli-alpine
 
 RUN apk add --no-cache \
         git \

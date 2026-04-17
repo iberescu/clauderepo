@@ -177,7 +177,7 @@ built locally from the per-service Dockerfiles — no external registry needed.
 
 ```
 docker-compose.yml               # backend + frontend services, shared volume
-backend/Dockerfile               # PHP 8.3 CLI + GD + composer + artisan serve
+backend/Dockerfile               # PHP 8.4 CLI + GD + composer + artisan serve
 backend/docker/entrypoint.sh     # seeds .env, generates APP_KEY on first boot
 backend/.dockerignore            # keeps vendor/ and runtime artefacts out of the image
 frontend/Dockerfile              # Node 20 + Vite dev server on :5173
