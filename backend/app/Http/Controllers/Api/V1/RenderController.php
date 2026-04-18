@@ -35,7 +35,7 @@ class RenderController extends Controller
     public function image(string $projectId, string $name): Response
     {
         $this->ensureExists($projectId);
-        $allowed = ['roof_base.png', 'roof_overlay.png', 'roof_render.png'];
+        $allowed = ['roof_base.png', 'roof_overlay.png', 'roof_render.png', 'roof_render_3d.png'];
         if (!in_array($name, $allowed, true)) {
             abort(404);
         }
@@ -57,10 +57,12 @@ class RenderController extends Controller
             'project_id' => $projectId,
             'notes' => $notes,
             'prompt' => $this->projects->readText($projectId, 'render/gemini_prompt.txt'),
+            'prompt_3d' => $this->projects->readText($projectId, 'render/gemini_prompt_3d.txt'),
             'images' => [
-                'roof_base'    => $this->projects->readBinary($projectId, 'render/roof_base.png')    ? $base.'roof_base.png'    : null,
-                'roof_overlay' => $this->projects->readBinary($projectId, 'render/roof_overlay.png') ? $base.'roof_overlay.png' : null,
-                'roof_render'  => $this->projects->readBinary($projectId, 'render/roof_render.png')  ? $base.'roof_render.png'  : null,
+                'roof_base'       => $this->projects->readBinary($projectId, 'render/roof_base.png')       ? $base.'roof_base.png'       : null,
+                'roof_overlay'    => $this->projects->readBinary($projectId, 'render/roof_overlay.png')    ? $base.'roof_overlay.png'    : null,
+                'roof_render'     => $this->projects->readBinary($projectId, 'render/roof_render.png')     ? $base.'roof_render.png'     : null,
+                'roof_render_3d'  => $this->projects->readBinary($projectId, 'render/roof_render_3d.png')  ? $base.'roof_render_3d.png'  : null,
             ],
         ];
     }

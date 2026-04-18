@@ -46,6 +46,11 @@ final class SolarAnalysisService
 
         $this->saveAnalysis($projectId, $analysis, $insights);
 
+        // Download the aerial RGB + mask + annual flux rasters as PNGs so the
+        // UI and the PDF can show real imagery. Failures are non-fatal — the
+        // deterministic overlay still gets produced in Phase 3.
+        $this->solar->downloadImagery($projectId, $candidate);
+
         $this->status->setStatus($projectId, StatusFileService::STATUS_ANALYSIS_READY,
             sprintf('segments=%d usable_area=%.1fm²', $analysis->usableSegments, $analysis->usableRoofAreaM2));
 

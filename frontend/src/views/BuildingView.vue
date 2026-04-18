@@ -14,6 +14,8 @@ const store = useProjectStore()
 
 const busy = ref(null)
 const renderImage = ref(null)
+const render3dImage = ref(null)
+const solarImagery = ref({ rgb: null, mask: null, flux: null })
 
 const hasAnalysis = computed(() => store.hasReached('analysis_ready'))
 const hasLayout = computed(() => store.hasReached('layout_ready'))
@@ -21,8 +23,23 @@ const hasRender = computed(() => store.hasReached('render_ready'))
 
 async function refreshRenderImage() {
   if (!hasRender.value) return
-  const url = api.renderImageUrl(props.id, 'roof_render.png') + '?ts=' + Date.now()
-  renderImage.value = url
+  const ts = Date.now()
+  renderImage.value = api.renderImageUrl(props.id, 'roof_render.png') + '?ts=' + ts
+  render3dImage.value = api.renderImageUrl(props.id, 'roof_render_3d.png') + '?ts=' + ts
+}
+
+async function refreshSolarImagery() {
+  if (!hasAnalysis.value) return
+  try {
+    const a = await api.analysis(props.id)
+    const imagery = a?.imagery || {}
+    const ts = Date.now()
+    solarImagery.value = {
+      rgb:  imagery.rgb  ? api.solarImageUrl(props.id, 'rgb.png')  + '?ts=' + ts : null,
+      mask: imagery.mask ? api.solarImageUrl(props.id, 'mask.png') + '?ts=' + ts : null,
+      flux: imagery.flux ? api.solarImageUrl(props.id, 'flux.png') + '?ts=' + ts : null,
+    }
+  } catch { /* ignore, keep placeholders */ }
 }
 
 onMounted(async () => {
@@ -36,6 +53,7 @@ onMounted(async () => {
       const l = await api.layout(props.id).catch(() => null)
       if (l) store.layout = l.layout || l
     }
+    await refreshSolarImagery()
     await refreshRenderImage()
   } catch { /* store.error */ }
 })
@@ -44,6 +62,7 @@ async function runStep(key, fn) {
   busy.value = key
   try {
     await fn()
+    if (key === 'analysis') await refreshSolarImagery()
     if (key === 'render') await refreshRenderImage()
   } catch { /* store.error */ }
   finally { busy.value = null }
@@ -105,6 +124,21 @@ function go() {
             <div class="stat-value">{{ store.analysis.usable_segments }}</div>
           </div>
         </div>
+
+        <div v-if="solarImagery.rgb || solarImagery.mask || solarImagery.flux" class="grid grid-cols-3 gap-2 pt-2">
+          <figure v-if="solarImagery.rgb" class="space-y-1">
+            <img :src="solarImagery.rgb" alt="Aerial RGB" class="w-full h-28 object-cover rounded border border-slate-200" />
+            <figcaption class="text-[11px] text-slate-500 text-center">Aerial</figcaption>
+          </figure>
+          <figure v-if="solarImagery.mask" class="space-y-1">
+            <img :src="solarImagery.mask" alt="Roof mask" class="w-full h-28 object-cover rounded border border-slate-200" />
+            <figcaption class="text-[11px] text-slate-500 text-center">Roof mask</figcaption>
+          </figure>
+          <figure v-if="solarImagery.flux" class="space-y-1">
+            <img :src="solarImagery.flux" alt="Annual flux" class="w-full h-28 object-cover rounded border border-slate-200" />
+            <figcaption class="text-[11px] text-slate-500 text-center">Annual flux</figcaption>
+          </figure>
+        </div>
       </div>
 
       <!-- Step B: layout -->
@@ -158,8 +192,19 @@ function go() {
         Panels are drawn from the exact coordinates above; Gemini enhances realism but cannot move any module. If the AI call fails, the deterministic overlay is preserved.
       </p>
 
-      <div v-if="hasRender" class="rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
-        <img :src="renderImage" alt="Roof render" class="w-full h-auto object-contain max-h-[480px] mx-auto" />
+      <div v-if="hasRender" class="grid md:grid-cols-2 gap-4">
+        <figure class="space-y-1">
+          <div class="rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+            <img :src="renderImage" alt="Top-down render" class="w-full h-auto object-contain max-h-[420px] mx-auto" />
+          </div>
+          <figcaption class="text-[11px] text-slate-500 text-center">Top-down render</figcaption>
+        </figure>
+        <figure class="space-y-1">
+          <div class="rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+            <img :src="render3dImage" alt="3D aerial render" class="w-full h-auto object-contain max-h-[420px] mx-auto" />
+          </div>
+          <figcaption class="text-[11px] text-slate-500 text-center">3D aerial render (Gemini)</figcaption>
+        </figure>
       </div>
       <div v-else class="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-400">
         Render not generated yet.

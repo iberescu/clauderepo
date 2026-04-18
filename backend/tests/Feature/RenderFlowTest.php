@@ -31,10 +31,11 @@ class RenderFlowTest extends TestCase
         $projectId = $this->buildUpToLayout();
 
         $response = $this->postJson("/api/v1/projects/{$projectId}/generate-render")->assertOk();
-        $response->assertJsonStructure(['data' => ['notes', 'prompt', 'images' => ['roof_base', 'roof_overlay', 'roof_render']]]);
+        $response->assertJsonStructure(['data' => ['notes', 'prompt', 'prompt_3d',
+            'images' => ['roof_base', 'roof_overlay', 'roof_render', 'roof_render_3d']]]);
 
         $disk = Storage::disk('local');
-        foreach (['roof_base.png', 'roof_overlay.png', 'roof_render.png'] as $name) {
+        foreach (['roof_base.png', 'roof_overlay.png', 'roof_render.png', 'roof_render_3d.png'] as $name) {
             $path = "projects/{$projectId}/render/{$name}";
             $this->assertTrue($disk->exists($path), "Missing {$name}");
             $bytes = $disk->get($path);
@@ -43,6 +44,7 @@ class RenderFlowTest extends TestCase
         }
 
         $disk->assertExists("projects/{$projectId}/render/gemini_prompt.txt");
+        $disk->assertExists("projects/{$projectId}/render/gemini_prompt_3d.txt");
         $disk->assertExists("projects/{$projectId}/render/render_notes.txt");
 
         $this->getJson("/api/v1/projects/{$projectId}/status")
@@ -54,10 +56,12 @@ class RenderFlowTest extends TestCase
         $projectId = $this->buildUpToLayout();
         $this->postJson("/api/v1/projects/{$projectId}/generate-render")->assertOk();
 
-        $response = $this->get("/api/v1/projects/{$projectId}/render/images/roof_overlay.png");
-        $response->assertOk();
-        $response->assertHeader('Content-Type', 'image/png');
-        $this->assertSame("\x89PNG\r\n\x1a\n", substr((string) $response->getContent(), 0, 8));
+        foreach (['roof_overlay.png', 'roof_render_3d.png'] as $name) {
+            $response = $this->get("/api/v1/projects/{$projectId}/render/images/{$name}");
+            $response->assertOk();
+            $response->assertHeader('Content-Type', 'image/png');
+            $this->assertSame("\x89PNG\r\n\x1a\n", substr((string) $response->getContent(), 0, 8));
+        }
     }
 
     public function test_generate_render_fails_without_layout(): void

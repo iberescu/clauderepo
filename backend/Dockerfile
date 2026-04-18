@@ -11,6 +11,7 @@ FROM php:8.4-cli-alpine
 RUN apk add --no-cache \
         git \
         unzip \
+        imagemagick \
         libzip-dev \
         libpng-dev \
         libjpeg-turbo-dev \

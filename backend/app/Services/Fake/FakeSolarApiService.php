@@ -118,4 +118,136 @@ final class FakeSolarApiService implements SolarApiServiceInterface
 
         return $summary;
     }
+
+    public function downloadImagery(string $projectId, Candidate $candidate): array
+    {
+        $seed = hexdec(substr(sha1($candidate->id.'|imagery'), 0, 8));
+
+        $rgb  = $this->renderFakeAerial($seed);
+        $mask = $this->renderFakeMask($seed);
+        $flux = $this->renderFakeFlux($seed);
+
+        $this->projects->writeBinary($projectId, 'solar/images/rgb.png',  $rgb);
+        $this->projects->writeBinary($projectId, 'solar/images/mask.png', $mask);
+        $this->projects->writeBinary($projectId, 'solar/images/flux.png', $flux);
+        $this->status->apiCall($projectId, 'fake.dataLayers.imagery', 200, 0.0, 'generated=3');
+
+        return [
+            'rgb'  => 'solar/images/rgb.png',
+            'mask' => 'solar/images/mask.png',
+            'flux' => 'solar/images/flux.png',
+        ];
+    }
+
+    // Deterministic fake aerial — textured ground + a single darker roof
+    // rectangle placed off-centre, so the preview looks like an aerial shot
+    // without pretending to be one.
+    private function renderFakeAerial(int $seed): string
+    {
+        $size = 384;
+        $img = imagecreatetruecolor($size, $size);
+        $rand = fn (int $mod, int $bias = 0) => $bias + ((($seed >> 3) ^ $mod) % 32);
+
+        $groundA = imagecolorallocate($img, 125 + $rand(1), 138 + $rand(2), 110 + $rand(3));
+        $groundB = imagecolorallocate($img, 98 + $rand(4),  112 + $rand(5), 84 + $rand(6));
+        imagefilledrectangle($img, 0, 0, $size, $size, $groundA);
+        for ($y = 0; $y < $size; $y += 4) {
+            for ($x = 0; $x < $size; $x += 4) {
+                if ((($x * 73 + $y * 131 + $seed) % 11) < 4) {
+                    imagefilledrectangle($img, $x, $y, $x + 3, $y + 3, $groundB);
+                }
+            }
+        }
+
+        $roofFill = imagecolorallocate($img, 170, 130, 100);
+        $roofLine = imagecolorallocate($img, 80, 60, 40);
+        $rx = (int) ($size * 0.28);
+        $ry = (int) ($size * 0.30);
+        $rw = (int) ($size * 0.46);
+        $rh = (int) ($size * 0.42);
+        imagefilledrectangle($img, $rx, $ry, $rx + $rw, $ry + $rh, $roofFill);
+        imagerectangle($img, $rx, $ry, $rx + $rw, $ry + $rh, $roofLine);
+        imageline($img, $rx, $ry + (int) ($rh / 2), $rx + $rw, $ry + (int) ($rh / 2), $roofLine);
+
+        $label = imagecolorallocate($img, 230, 235, 240);
+        imagestring($img, 4, 10, $size - 24, 'Aerial (fake)', $label);
+
+        ob_start();
+        imagepng($img);
+        $bytes = (string) ob_get_clean();
+        imagedestroy($img);
+        return $bytes;
+    }
+
+    private function renderFakeMask(int $seed): string
+    {
+        $size = 384;
+        $img = imagecreatetruecolor($size, $size);
+        $bg = imagecolorallocate($img, 10, 20, 40);
+        imagefilledrectangle($img, 0, 0, $size, $size, $bg);
+        $tint = imagecolorallocatealpha($img, 37, 99, 235, 40); // #2563EB @ ~70% opacity
+        $rx = (int) ($size * 0.26 + ($seed % 11));
+        $ry = (int) ($size * 0.28 + ($seed % 7));
+        $rw = (int) ($size * 0.48);
+        $rh = (int) ($size * 0.42);
+        imagealphablending($img, true);
+        imagefilledrectangle($img, $rx, $ry, $rx + $rw, $ry + $rh, $tint);
+        $label = imagecolorallocate($img, 230, 235, 240);
+        imagestring($img, 4, 10, $size - 24, 'Mask overlay (fake)', $label);
+
+        ob_start();
+        imagepng($img);
+        $bytes = (string) ob_get_clean();
+        imagedestroy($img);
+        return $bytes;
+    }
+
+    private function renderFakeFlux(int $seed): string
+    {
+        $size = 384;
+        $img = imagecreatetruecolor($size, $size);
+        // Deterministic radial heatmap: hotspot near roof centre, cooler at edges.
+        $cx = (int) ($size * 0.52);
+        $cy = (int) ($size * 0.48);
+        $maxD = sqrt($cx * $cx + $cy * $cy);
+        for ($y = 0; $y < $size; $y++) {
+            for ($x = 0; $x < $size; $x++) {
+                $d = sqrt(($x - $cx) ** 2 + ($y - $cy) ** 2) / $maxD; // 0..1
+                $t = max(0.0, min(1.0, 1.0 - $d + (($seed + $x * 7 + $y * 13) % 11) / 110.0));
+                [$r, $g, $b] = $this->flux3Stop($t);
+                imagesetpixel($img, $x, $y, imagecolorallocate($img, $r, $g, $b));
+            }
+        }
+        $label = imagecolorallocate($img, 240, 240, 245);
+        imagestring($img, 4, 10, $size - 24, 'Annual flux (fake)', $label);
+
+        ob_start();
+        imagepng($img);
+        $bytes = (string) ob_get_clean();
+        imagedestroy($img);
+        return $bytes;
+    }
+
+    /** 3-stop palette: deep blue (#0b3d91) → yellow (#f9d423) → deep red (#b30000). */
+    private function flux3Stop(float $t): array
+    {
+        $stops = [
+            [0.0, [0x0b, 0x3d, 0x91]],
+            [0.5, [0xf9, 0xd4, 0x23]],
+            [1.0, [0xb3, 0x00, 0x00]],
+        ];
+        for ($i = 1; $i < count($stops); $i++) {
+            if ($t <= $stops[$i][0]) {
+                $lo = $stops[$i - 1];
+                $hi = $stops[$i];
+                $k = ($t - $lo[0]) / max(1e-6, ($hi[0] - $lo[0]));
+                return [
+                    (int) round($lo[1][0] + ($hi[1][0] - $lo[1][0]) * $k),
+                    (int) round($lo[1][1] + ($hi[1][1] - $lo[1][1]) * $k),
+                    (int) round($lo[1][2] + ($hi[1][2] - $lo[1][2]) * $k),
+                ];
+            }
+        }
+        return $stops[count($stops) - 1][1];
+    }
 }

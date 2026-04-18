@@ -26,6 +26,9 @@ final class ProposalSummary
         public readonly PricingBreakdown   $pricing,
         public readonly SavingsForecast    $savings,
         public readonly ?string            $renderImagePath = null,
+        public readonly ?string            $render3dImagePath = null,
+        public readonly ?string            $aerialImagePath = null,
+        public readonly ?string            $fluxImagePath = null,
     ) {
     }
 
@@ -45,6 +48,9 @@ final class ProposalSummary
             'pricing'          => $this->pricing->toArray(),
             'savings'          => $this->savings->toArray(),
             'render_image'     => $this->renderImagePath,
+            'render_3d_image'  => $this->render3dImagePath,
+            'aerial_image'     => $this->aerialImagePath,
+            'flux_image'       => $this->fluxImagePath,
         ];
     }
 }

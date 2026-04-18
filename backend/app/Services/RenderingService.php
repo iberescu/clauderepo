@@ -13,12 +13,14 @@ use GdImage;
 use RuntimeException;
 
 /**
- * Turns the deterministic layout into three PNGs:
+ * Turns the deterministic layout into four PNGs:
  *
  *   render/roof_base.png      — clean top-down roof (no panels)
  *   render/roof_overlay.png   — roof + exact panel rectangles (the mask that
  *                               is handed to Gemini)
- *   render/roof_render.png    — photorealistic version returned by the AI
+ *   render/roof_render.png    — photorealistic top-down version from Gemini
+ *   render/roof_render_3d.png — aerial 3D perspective view from Gemini, meant
+ *                               to be the hero image in the sales proposal
  *
  * The pixel coordinates for the panel rectangles are computed once here and
  * stamped into both overlay and render notes, so downstream steps can verify
@@ -75,6 +77,20 @@ final class RenderingService
             $renderNotes .= "\nenhanced:\n  renderer: fallback_overlay\n  error: ".$e->getMessage()."\n";
         }
 
+        $prompt3d = $this->prompt3d();
+        $this->projects->writeText($projectId, 'render/gemini_prompt_3d.txt', $prompt3d);
+        try {
+            $result3d = $this->gemini->enhance($overlayPng, $prompt3d);
+            $this->projects->writeBinary($projectId, 'render/roof_render_3d.png', $result3d['bytes']);
+            $renderNotes .= "\nenhanced_3d:\n".$result3d['notes'];
+            $this->status->progress($projectId, 'render.enhance_3d ok bytes='.strlen($result3d['bytes']));
+        } catch (\Throwable $e) {
+            $this->status->error($projectId, 'render.enhance_3d failed, falling back to top-down render', $e);
+            $topDown = $this->projects->readBinary($projectId, 'render/roof_render.png') ?? $overlayPng;
+            $this->projects->writeBinary($projectId, 'render/roof_render_3d.png', $topDown);
+            $renderNotes .= "\nenhanced_3d:\n  renderer: fallback_top_down\n  error: ".$e->getMessage()."\n";
+        }
+
         $this->projects->writeText($projectId, 'render/render_notes.txt', $renderNotes);
         $this->status->setStatus($projectId, StatusFileService::STATUS_RENDER_READY,
             'panels='.$layout->totalPanels);
@@ -92,6 +108,23 @@ Do not change roof geometry.
 Improve realism, lighting, reflections, and shadows only.
 Use a soft morning light and a shallow isometric top-down perspective.
 Keep dark blue monocrystalline panels with silver frames.
+PROMPT;
+    }
+
+    public function prompt3d(): string
+    {
+        return <<<PROMPT
+Render an aerial 3D perspective of the same rooftop seen from roughly 45
+degrees, as if taken from a low drone shot. Keep the exact panel grid
+positions from the overlay mask — do not invent additional panels or move
+existing ones. Preserve roof geometry and proportions.
+Use dark blue monocrystalline panels with silver frames.
+Use warm late-afternoon sunlight coming from the upper left, with soft
+shadows cast by the panels onto the roof surface, subtle sky reflections on
+the glass, and a clean suburban neighbourhood blurred gently in the
+background. The result should feel like a realistic sales marketing photo
+while still being clearly recognisable as the same rooftop in the supplied
+top-down mask.
 PROMPT;
     }
 

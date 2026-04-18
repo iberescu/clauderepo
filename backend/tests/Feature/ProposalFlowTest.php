@@ -47,16 +47,26 @@ class ProposalFlowTest extends TestCase
             $this->assertTrue($disk->exists("{$base}/{$name}"), "Missing {$name}");
         }
 
-        // PDF magic + EOF marker
+        // PDF magic + EOF marker + embedded image XObjects
         $pdf = (string) $disk->get("{$base}/proposal.pdf");
         $this->assertSame('%PDF-1.4', substr($pdf, 0, 8));
         $this->assertStringContainsString('%%EOF', $pdf);
         $this->assertGreaterThan(1000, strlen($pdf));
+        $this->assertStringContainsString('/Subtype /Image', $pdf);
+        $this->assertStringContainsString('/Filter /DCTDecode', $pdf);
 
-        // HTML contains the render image as a data URI
+        // HTML contains the render images and the new solar imagery section
         $html = (string) $disk->get("{$base}/proposal.html");
         $this->assertStringContainsString('data:image/png;base64,', $html);
         $this->assertStringContainsString('Rooftop solar proposal', $html);
+        $this->assertStringContainsString('Roof imagery from Google Solar', $html);
+        $this->assertStringContainsString('Aerial 3D render', $html);
+
+        // Summary JSON records the extra image paths
+        $summary = json_decode((string) $disk->get("{$base}/proposal_summary.json"), true);
+        $this->assertSame('render/roof_render_3d.png', $summary['render_3d_image'] ?? null);
+        $this->assertSame('solar/images/rgb.png', $summary['aerial_image'] ?? null);
+        $this->assertSame('solar/images/flux.png', $summary['flux_image'] ?? null);
 
         // Savings forecast persisted alongside pricing
         $this->assertTrue($disk->exists("projects/{$projectId}/pricing/savings_forecast.json"));

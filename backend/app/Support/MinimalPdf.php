@@ -25,6 +25,9 @@ final class MinimalPdf
     private string $current = '';
     private float  $cursorY;
 
+    /** @var list<array{id: string, jpeg: string, w: int, h: int}> */
+    private array $images = [];
+
     public function __construct()
     {
         $this->cursorY = self::PAGE_HEIGHT - self::MARGIN_TOP;
@@ -113,6 +116,61 @@ final class MinimalPdf
         if ($this->cursorY < self::MARGIN_BOT) {
             $this->newPage();
         }
+        return $this;
+    }
+
+    /**
+     * Embed a PNG (or anything GD can decode) as a JPEG-compressed XObject,
+     * scaled to fit within (maxWidth × maxHeight) points while preserving
+     * aspect ratio, horizontally centred in the text column.
+     *
+     * Transparent pixels are flattened onto white so JPEG can represent them.
+     * Invalid image bytes are silently skipped so a missing render file does
+     * not break the whole PDF.
+     */
+    public function image(string $imageBytes, ?float $maxWidth = null, float $maxHeight = 240.0): self
+    {
+        if ($imageBytes === '') {
+            return $this;
+        }
+        $src = @imagecreatefromstring($imageBytes);
+        if ($src === false) {
+            return $this;
+        }
+        $w = imagesx($src);
+        $h = imagesy($src);
+
+        $flat = imagecreatetruecolor($w, $h);
+        $white = imagecolorallocate($flat, 255, 255, 255);
+        imagefilledrectangle($flat, 0, 0, $w, $h, $white);
+        imagecopy($flat, $src, 0, 0, 0, 0, $w, $h);
+        imagedestroy($src);
+
+        ob_start();
+        imagejpeg($flat, null, 80);
+        $jpeg = (string) ob_get_clean();
+        imagedestroy($flat);
+
+        $maxWidth ??= self::PAGE_WIDTH - 2 * self::MARGIN_X;
+        $scale = min($maxWidth / $w, $maxHeight / $h);
+        if ($scale <= 0) {
+            return $this;
+        }
+        $drawW = $w * $scale;
+        $drawH = $h * $scale;
+
+        $this->ensureRoom($drawH + 6);
+
+        $id = 'Img'.(count($this->images) + 1);
+        $this->images[] = ['id' => $id, 'jpeg' => $jpeg, 'w' => $w, 'h' => $h];
+
+        $this->cursorY -= $drawH;
+        $x = self::MARGIN_X + ($maxWidth - $drawW) / 2;
+        $this->current .= sprintf(
+            "q %.2f 0 0 %.2f %.2f %.2f cm /%s Do Q\n",
+            $drawW, $drawH, $x, $this->cursorY, $id,
+        );
+        $this->cursorY -= 4;
         return $this;
     }
 
@@ -213,6 +271,7 @@ final class MinimalPdf
     private function assemble(): string
     {
         $objects = [];
+        $streams = [];
 
         $objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
 
@@ -227,13 +286,23 @@ final class MinimalPdf
             $pageCount,
         );
 
-        $fontRef = "/F1 ".(3 + $pageCount * 2)." 0 R /F2 ".(4 + $pageCount * 2)." 0 R";
+        $fontRegId  = 3 + $pageCount * 2;
+        $fontBoldId = $fontRegId + 1;
+        $fontRef    = "/F1 {$fontRegId} 0 R /F2 {$fontBoldId} 0 R";
+
+        $imageObjStart = $fontBoldId + 1;
+        $xobjectRefs = [];
+        foreach ($this->images as $i => $img) {
+            $xobjectRefs[] = '/'.$img['id'].' '.($imageObjStart + $i).' 0 R';
+        }
+        $xobjectDict = $xobjectRefs === [] ? '' : ' /XObject << '.implode(' ', $xobjectRefs).' >>';
+
         for ($i = 0; $i < $pageCount; $i++) {
             $pageId = 3 + $i * 2;
             $contentId = $pageId + 1;
             $objects[$pageId] = sprintf(
-                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2f %.2f] /Contents %d 0 R /Resources << /Font << %s >> >> >>",
-                self::PAGE_WIDTH, self::PAGE_HEIGHT, $contentId, $fontRef,
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 %.2f %.2f] /Contents %d 0 R /Resources << /Font << %s >>%s >> >>",
+                self::PAGE_WIDTH, self::PAGE_HEIGHT, $contentId, $fontRef, $xobjectDict,
             );
             $stream = $this->pages[$i];
             $objects[$contentId] = sprintf(
@@ -243,17 +312,27 @@ final class MinimalPdf
             );
         }
 
-        $fontRegId = 3 + $pageCount * 2;
-        $fontBoldId = $fontRegId + 1;
         $objects[$fontRegId]  = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
         $objects[$fontBoldId] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
+
+        foreach ($this->images as $i => $img) {
+            $id = $imageObjStart + $i;
+            $len = strlen($img['jpeg']);
+            $header = sprintf(
+                "<< /Type /XObject /Subtype /Image /Width %d /Height %d /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length %d >>\nstream\n",
+                $img['w'], $img['h'], $len,
+            );
+            $objects[$id] = '';
+            $streams[$id] = $header.$img['jpeg']."\nendstream";
+        }
 
         ksort($objects);
         $out = "%PDF-1.4\n%\xe2\xe3\xcf\xd3\n";
         $offsets = [];
         foreach ($objects as $id => $body) {
             $offsets[$id] = strlen($out);
-            $out .= "{$id} 0 obj\n{$body}\nendobj\n";
+            $rendered = isset($streams[$id]) ? $streams[$id] : $body;
+            $out .= "{$id} 0 obj\n{$rendered}\nendobj\n";
         }
 
         $xrefOffset = strlen($out);

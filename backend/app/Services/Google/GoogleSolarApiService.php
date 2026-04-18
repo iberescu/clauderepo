@@ -10,8 +10,10 @@ use App\DTOs\RoofSegment;
 use App\Repositories\ProjectFileRepository;
 use App\Services\Contracts\SolarApiServiceInterface;
 use App\Services\StatusFileService;
+use App\Support\TiffPreview;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use RuntimeException;
+use Throwable;
 
 /**
  * Real Google Solar API client. Implements Building Insights + a lightweight
@@ -91,6 +93,86 @@ final class GoogleSolarApiService implements SolarApiServiceInterface
                 $summary['annual_flux_max'], $summary['annual_flux_mean'], $summary['mask_coverage'])
         );
         return $summary;
+    }
+
+    public function downloadImagery(string $projectId, Candidate $candidate): array
+    {
+        $key = (string) config('solar.google.solar_api_key');
+        if ($key === '') {
+            return [];
+        }
+        $raw = $this->projects->readText($projectId, 'solar/data_layers_raw.txt');
+        if ($raw === null) {
+            return [];
+        }
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            return [];
+        }
+
+        $saved = [];
+
+        $rgbTiff = $this->fetchTiff($projectId, 'rgb', $payload['rgbUrl'] ?? null, $key);
+        if ($rgbTiff !== null) {
+            $saved['rgb'] = $this->convertAndStore(
+                $projectId, 'rgb.png',
+                fn () => TiffPreview::rgbToPng($rgbTiff),
+            );
+        }
+
+        $maskTiff = $this->fetchTiff($projectId, 'mask', $payload['maskUrl'] ?? null, $key);
+        if ($maskTiff !== null) {
+            $saved['mask'] = $this->convertAndStore(
+                $projectId, 'mask.png',
+                fn () => TiffPreview::maskOverlayOnRgb($maskTiff, $rgbTiff),
+            );
+        }
+
+        $fluxTiff = $this->fetchTiff($projectId, 'flux', $payload['annualFluxUrl'] ?? null, $key);
+        if ($fluxTiff !== null) {
+            $saved['flux'] = $this->convertAndStore(
+                $projectId, 'flux.png',
+                fn () => TiffPreview::fluxHeatmap($fluxTiff),
+            );
+        }
+
+        return array_filter($saved, fn ($v) => $v !== null);
+    }
+
+    private function fetchTiff(string $projectId, string $label, mixed $url, string $key): ?string
+    {
+        if (!is_string($url) || $url === '') {
+            return null;
+        }
+        $started = microtime(true);
+        try {
+            $resp = $this->http->timeout(60)->get($url, ['key' => $key]);
+        } catch (Throwable $e) {
+            $this->status->error($projectId, "solar.imagery {$label} fetch failed", $e);
+            return null;
+        }
+        $duration = (microtime(true) - $started) * 1000;
+        $this->status->apiCall($projectId, "google.dataLayers.{$label}", $resp->status(), $duration);
+        if (!$resp->ok()) {
+            return null;
+        }
+        return (string) $resp->body();
+    }
+
+    /**
+     * @param callable():string $converter
+     */
+    private function convertAndStore(string $projectId, string $filename, callable $converter): ?string
+    {
+        try {
+            $png = $converter();
+        } catch (Throwable $e) {
+            $this->status->error($projectId, "solar.imagery {$filename} convert failed", $e);
+            return null;
+        }
+        $this->projects->writeBinary($projectId, 'solar/images/'.$filename, $png);
+        $this->status->progress($projectId, 'solar.imagery saved '.$filename.' bytes='.strlen($png));
+        return 'solar/images/'.$filename;
     }
 
     /** @param array<string, mixed>|null $body */

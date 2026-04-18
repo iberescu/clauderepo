@@ -50,6 +50,8 @@
     }
     .render img { max-width: 100%; height: auto; border-radius: 6px; }
     .render .caption { margin-top: 8px; color: var(--muted); font-size: 12px; }
+    .render-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0 6px; }
+    .render-pair .render { margin: 0; }
 
     table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
     th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
@@ -106,10 +108,38 @@
     </div>
   </div>
 
-  @if ($renderDataUri)
-    <div class="render">
-      <img src="{{ $renderDataUri }}" alt="Roof render">
-      <div class="caption">Proposed panel layout on the selected roof (deterministic geometry; render is AI-enhanced).</div>
+  @if ($renderDataUri || $render3dDataUri)
+    <div class="render-pair">
+      @if ($renderDataUri)
+        <div class="render">
+          <img src="{{ $renderDataUri }}" alt="Top-down render">
+          <div class="caption">Top-down render — panel geometry is deterministic, realism is AI-enhanced.</div>
+        </div>
+      @endif
+      @if ($render3dDataUri)
+        <div class="render">
+          <img src="{{ $render3dDataUri }}" alt="3D aerial render">
+          <div class="caption">Aerial 3D render (Gemini) — same panel grid seen from a drone-height perspective.</div>
+        </div>
+      @endif
+    </div>
+  @endif
+
+  @if ($aerialDataUri || $fluxDataUri)
+    <h2>Roof imagery from Google Solar</h2>
+    <div class="render-pair">
+      @if ($aerialDataUri)
+        <div class="render">
+          <img src="{{ $aerialDataUri }}" alt="Aerial photo">
+          <div class="caption">Aerial photograph of the building (Solar Data Layers RGB).</div>
+        </div>
+      @endif
+      @if ($fluxDataUri)
+        <div class="render">
+          <img src="{{ $fluxDataUri }}" alt="Annual solar flux heatmap">
+          <div class="caption">Annual solar flux heatmap — warmer colours mark the sunniest roof zones.</div>
+        </div>
+      @endif
     </div>
   @endif
 

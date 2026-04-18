@@ -23,6 +23,8 @@ Route::prefix('v1')->group(function () {
 
     Route::post('/projects/{projectId}/analyze-building', [BuildingController::class, 'analyze']);
     Route::get('/projects/{projectId}/analysis', [BuildingController::class, 'show']);
+    Route::get('/projects/{projectId}/solar/images/{name}', [BuildingController::class, 'image'])
+        ->where('name', '(rgb|mask|flux)\.png');
 
     Route::post('/projects/{projectId}/generate-layout', [LayoutController::class, 'generate']);
     Route::get('/projects/{projectId}/layout', [LayoutController::class, 'show']);
@@ -30,7 +32,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/projects/{projectId}/generate-render', [RenderController::class, 'generate']);
     Route::get('/projects/{projectId}/render', [RenderController::class, 'show']);
     Route::get('/projects/{projectId}/render/images/{name}', [RenderController::class, 'image'])
-        ->where('name', 'roof_(base|overlay|render)\.png');
+        ->where('name', 'roof_(base|overlay|render|render_3d)\.png');
 
     Route::post('/projects/{projectId}/generate-pricing', [PricingController::class, 'generate']);
     Route::get('/projects/{projectId}/pricing', [PricingController::class, 'show']);

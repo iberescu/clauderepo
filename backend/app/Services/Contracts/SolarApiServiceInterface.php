@@ -24,4 +24,15 @@ interface SolarApiServiceInterface
      * @return array{annual_flux_max: float, annual_flux_mean: float, mask_coverage: float}
      */
     public function dataLayersSummary(string $projectId, Candidate $candidate): array;
+
+    /**
+     * Download the RGB aerial GeoTIFF exposed by Data Layers, convert it to a
+     * browser-friendly PNG and persist it under solar/images/. Returns the map
+     * of saved images keyed by name (e.g. ['rgb' => 'solar/images/rgb.png']).
+     * Failures should log via the status service and return an empty array so
+     * the pipeline can continue with the deterministic artefacts.
+     *
+     * @return array<string, string>
+     */
+    public function downloadImagery(string $projectId, Candidate $candidate): array;
 }

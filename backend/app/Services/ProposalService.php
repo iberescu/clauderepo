@@ -61,18 +61,21 @@ final class ProposalService
         $renderRelativePath = $this->resolveRenderPath($projectId);
 
         $summary = new ProposalSummary(
-            projectId:       $projectId,
-            generatedAt:     $now->format(DATE_ATOM),
-            validUntil:      $validUntil->format('Y-m-d'),
-            customerAddress: $candidate->formattedAddress,
-            branding:        $branding,
-            panelSpec:       $panelCfg,
-            building:        $building,
-            analysis:        $analysis,
-            layout:          $layout,
-            pricing:         $pricingBreakdown,
-            savings:         $savingsForecast,
-            renderImagePath: $renderRelativePath,
+            projectId:          $projectId,
+            generatedAt:        $now->format(DATE_ATOM),
+            validUntil:         $validUntil->format('Y-m-d'),
+            customerAddress:    $candidate->formattedAddress,
+            branding:           $branding,
+            panelSpec:          $panelCfg,
+            building:           $building,
+            analysis:           $analysis,
+            layout:             $layout,
+            pricing:            $pricingBreakdown,
+            savings:            $savingsForecast,
+            renderImagePath:    $renderRelativePath,
+            render3dImagePath:  $this->pathIfExists($projectId, 'render/roof_render_3d.png'),
+            aerialImagePath:    $this->pathIfExists($projectId, 'solar/images/rgb.png'),
+            fluxImagePath:      $this->pathIfExists($projectId, 'solar/images/flux.png'),
         );
 
         $this->persistSummary($projectId, $summary);
@@ -93,18 +96,27 @@ final class ProposalService
 
     public function renderHtml(ProposalSummary $summary): string
     {
-        $renderDataUri = null;
-        if ($summary->renderImagePath !== null) {
-            $bytes = $this->projects->readBinary($summary->projectId, $summary->renderImagePath);
-            if ($bytes !== null) {
-                $renderDataUri = 'data:image/png;base64,'.base64_encode($bytes);
-            }
-        }
-
         return (string) $this->views->make('proposal.proposal', [
-            'summary' => $summary,
-            'renderDataUri' => $renderDataUri,
+            'summary'          => $summary,
+            'renderDataUri'    => $this->dataUri($summary->projectId, $summary->renderImagePath),
+            'render3dDataUri'  => $this->dataUri($summary->projectId, $summary->render3dImagePath),
+            'aerialDataUri'    => $this->dataUri($summary->projectId, $summary->aerialImagePath),
+            'fluxDataUri'      => $this->dataUri($summary->projectId, $summary->fluxImagePath),
         ])->render();
+    }
+
+    private function dataUri(string $projectId, ?string $relPath): ?string
+    {
+        if ($relPath === null) {
+            return null;
+        }
+        $bytes = $this->projects->readBinary($projectId, $relPath);
+        return $bytes === null ? null : 'data:image/png;base64,'.base64_encode($bytes);
+    }
+
+    private function pathIfExists(string $projectId, string $relPath): ?string
+    {
+        return $this->projects->readBinary($projectId, $relPath) === null ? null : $relPath;
     }
 
     private function loadOrComputePricing(string $projectId, \App\DTOs\RoofLayout $layout): PricingBreakdown
@@ -163,6 +175,9 @@ final class ProposalService
             'lifetime_savings'   => round($s->savings->lifetimeSavings, 2),
             'payback_years'      => round($s->savings->paybackYears, 2),
             'render_image'       => $s->renderImagePath,
+            'render_3d_image'    => $s->render3dImagePath,
+            'aerial_image'       => $s->aerialImagePath,
+            'flux_image'         => $s->fluxImagePath,
         ]));
     }
 
@@ -190,6 +205,19 @@ final class ProposalService
             ->kv('Valid until', $s->validUntil)
             ->kv('Project ID', $s->projectId)
             ->spacer(4);
+
+        $hero = $this->loadImage($s->projectId, $s->render3dImagePath)
+             ?? $this->loadImage($s->projectId, $s->renderImagePath);
+        if ($hero !== null) {
+            $pdf->heading('Your rooftop, with the panels in place');
+            $pdf->image($hero, null, 280.0);
+            $pdf->paragraph(
+                $s->render3dImagePath !== null
+                    ? 'Aerial 3D render from a generative-AI pass; panel grid matches the deterministic layout exactly.'
+                    : 'Top-down render with each module placed at the exact layout coordinates.',
+                9.5,
+            );
+        }
 
         $pdf->heading('System at a glance')
             ->kv('Panels', sprintf('%d x %s', $s->layout->totalPanels, (string)($s->panelSpec['model'] ?? 'module')))
@@ -243,6 +271,20 @@ final class ProposalService
         }
         $pdf->table($yrRows);
 
+        $aerial = $this->loadImage($s->projectId, $s->aerialImagePath);
+        $flux   = $this->loadImage($s->projectId, $s->fluxImagePath);
+        if ($aerial !== null || $flux !== null) {
+            $pdf->heading('Roof imagery from Google Solar');
+            if ($aerial !== null) {
+                $pdf->image($aerial, null, 220.0);
+                $pdf->paragraph('Aerial photo of the building (Google Solar Data Layers RGB).', 9.0);
+            }
+            if ($flux !== null) {
+                $pdf->image($flux, null, 220.0);
+                $pdf->paragraph('Annual solar flux heatmap — warmer colours mark roof areas with the highest yearly sunshine exposure.', 9.0);
+            }
+        }
+
         $pdf->heading('Contact')
             ->kv('Company', $company)
             ->kv('Email',   (string)($s->branding['contact_email'] ?? ''))
@@ -257,5 +299,13 @@ final class ProposalService
     private function money(float $amount, string $currency): string
     {
         return number_format($amount, 2).' '.$currency;
+    }
+
+    private function loadImage(string $projectId, ?string $relPath): ?string
+    {
+        if ($relPath === null) {
+            return null;
+        }
+        return $this->projects->readBinary($projectId, $relPath);
     }
 }

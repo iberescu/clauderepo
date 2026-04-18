@@ -35,6 +35,7 @@ export const api = {
 
   analyzeBuilding:      (id)           => data(client.post(`/projects/${id}/analyze-building`)),
   analysis:             (id)           => data(client.get(`/projects/${id}/analysis`)),
+  solarImageUrl:        (id, name)     => `/api/v1/projects/${id}/solar/images/${name}`,
 
   generateLayout:       (id)           => data(client.post(`/projects/${id}/generate-layout`)),
   layout:               (id)           => data(client.get(`/projects/${id}/layout`)),

@@ -47,10 +47,20 @@ class AnalysisFlowTest extends TestCase
         $disk->assertExists("projects/{$projectId}/solar/solar_analysis.txt");
         $disk->assertExists("projects/{$projectId}/solar/annual_flux_summary.txt");
         $disk->assertExists("projects/{$projectId}/solar/shade_summary.txt");
+        $disk->assertExists("projects/{$projectId}/solar/images/rgb.png");
+        $disk->assertExists("projects/{$projectId}/solar/images/mask.png");
+        $disk->assertExists("projects/{$projectId}/solar/images/flux.png");
 
         $this->getJson("/api/v1/projects/{$projectId}/analysis")
             ->assertOk()
-            ->assertJsonPath('data.project_id', $projectId);
+            ->assertJsonPath('data.project_id', $projectId)
+            ->assertJsonPath('data.imagery.rgb', "/api/v1/projects/{$projectId}/solar/images/rgb.png")
+            ->assertJsonPath('data.imagery.mask', "/api/v1/projects/{$projectId}/solar/images/mask.png")
+            ->assertJsonPath('data.imagery.flux', "/api/v1/projects/{$projectId}/solar/images/flux.png");
+
+        $rgb = $this->get("/api/v1/projects/{$projectId}/solar/images/rgb.png")
+            ->assertOk()->assertHeader('Content-Type', 'image/png');
+        $this->assertNotEmpty($rgb->getContent());
 
         $layout = $this->postJson("/api/v1/projects/{$projectId}/generate-layout")->assertOk();
         $layout->assertJsonStructure(['data' => ['layout' => [
