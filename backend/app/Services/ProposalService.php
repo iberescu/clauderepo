@@ -61,21 +61,23 @@ final class ProposalService
         $renderRelativePath = $this->resolveRenderPath($projectId);
 
         $summary = new ProposalSummary(
-            projectId:          $projectId,
-            generatedAt:        $now->format(DATE_ATOM),
-            validUntil:         $validUntil->format('Y-m-d'),
-            customerAddress:    $candidate->formattedAddress,
-            branding:           $branding,
-            panelSpec:          $panelCfg,
-            building:           $building,
-            analysis:           $analysis,
-            layout:             $layout,
-            pricing:            $pricingBreakdown,
-            savings:            $savingsForecast,
-            renderImagePath:    $renderRelativePath,
-            render3dImagePath:  $this->pathIfExists($projectId, 'render/roof_render_3d.png'),
-            aerialImagePath:    $this->pathIfExists($projectId, 'solar/images/rgb.png'),
-            fluxImagePath:      $this->pathIfExists($projectId, 'solar/images/flux.png'),
+            projectId:             $projectId,
+            generatedAt:           $now->format(DATE_ATOM),
+            validUntil:            $validUntil->format('Y-m-d'),
+            customerAddress:       $candidate->formattedAddress,
+            branding:              $branding,
+            panelSpec:             $panelCfg,
+            building:              $building,
+            analysis:              $analysis,
+            layout:                $layout,
+            pricing:               $pricingBreakdown,
+            savings:               $savingsForecast,
+            renderImagePath:       $renderRelativePath,
+            render3dImagePath:     $this->pathIfExists($projectId, 'render/roof_render_3d.png'),
+            aerialImagePath:       $this->pathIfExists($projectId, 'solar/images/rgb.png'),
+            fluxImagePath:         $this->pathIfExists($projectId, 'solar/images/flux.png'),
+            realAerial3dImagePath: $this->pathIfExists($projectId, 'render/real_aerial_render_3d.png'),
+            staticMap3dImagePath:  $this->pathIfExists($projectId, 'render/static_map_render_3d.png'),
         );
 
         $this->persistSummary($projectId, $summary);
@@ -97,11 +99,13 @@ final class ProposalService
     public function renderHtml(ProposalSummary $summary): string
     {
         return (string) $this->views->make('proposal.proposal', [
-            'summary'          => $summary,
-            'renderDataUri'    => $this->dataUri($summary->projectId, $summary->renderImagePath),
-            'render3dDataUri'  => $this->dataUri($summary->projectId, $summary->render3dImagePath),
-            'aerialDataUri'    => $this->dataUri($summary->projectId, $summary->aerialImagePath),
-            'fluxDataUri'      => $this->dataUri($summary->projectId, $summary->fluxImagePath),
+            'summary'              => $summary,
+            'renderDataUri'        => $this->dataUri($summary->projectId, $summary->renderImagePath),
+            'render3dDataUri'      => $this->dataUri($summary->projectId, $summary->render3dImagePath),
+            'aerialDataUri'        => $this->dataUri($summary->projectId, $summary->aerialImagePath),
+            'fluxDataUri'          => $this->dataUri($summary->projectId, $summary->fluxImagePath),
+            'realAerial3dDataUri'  => $this->dataUri($summary->projectId, $summary->realAerial3dImagePath),
+            'staticMap3dDataUri'   => $this->dataUri($summary->projectId, $summary->staticMap3dImagePath),
         ])->render();
     }
 
@@ -174,10 +178,12 @@ final class ProposalService
             'first_year_savings' => round($s->savings->firstYearSavings, 2),
             'lifetime_savings'   => round($s->savings->lifetimeSavings, 2),
             'payback_years'      => round($s->savings->paybackYears, 2),
-            'render_image'       => $s->renderImagePath,
-            'render_3d_image'    => $s->render3dImagePath,
-            'aerial_image'       => $s->aerialImagePath,
-            'flux_image'         => $s->fluxImagePath,
+            'render_image'         => $s->renderImagePath,
+            'render_3d_image'      => $s->render3dImagePath,
+            'aerial_image'         => $s->aerialImagePath,
+            'flux_image'           => $s->fluxImagePath,
+            'real_aerial_3d_image' => $s->realAerial3dImagePath,
+            'static_map_3d_image'  => $s->staticMap3dImagePath,
         ]));
     }
 
@@ -206,17 +212,34 @@ final class ProposalService
             ->kv('Project ID', $s->projectId)
             ->spacer(4);
 
-        $hero = $this->loadImage($s->projectId, $s->render3dImagePath)
-             ?? $this->loadImage($s->projectId, $s->renderImagePath);
+        $heroPath = $s->realAerial3dImagePath
+            ?? $s->staticMap3dImagePath
+            ?? $s->render3dImagePath
+            ?? $s->renderImagePath;
+        $hero = $this->loadImage($s->projectId, $heroPath);
         if ($hero !== null) {
             $pdf->heading('Your rooftop, with the panels in place');
             $pdf->image($hero, null, 280.0);
-            $pdf->paragraph(
-                $s->render3dImagePath !== null
-                    ? 'Aerial 3D render from a generative-AI pass; panel grid matches the deterministic layout exactly.'
-                    : 'Top-down render with each module placed at the exact layout coordinates.',
-                9.5,
-            );
+            $caption = match (true) {
+                $heroPath === $s->realAerial3dImagePath => 'Aerial 3D render composed on the Google Solar RGB photo of the building; panel grid matches the deterministic layout exactly.',
+                $heroPath === $s->staticMap3dImagePath  => 'Aerial 3D render composed on the Google Maps satellite tile of the building; panel grid matches the deterministic layout exactly.',
+                $heroPath === $s->render3dImagePath     => 'Aerial 3D render from a generative-AI pass over the synthetic layout; panel grid matches the deterministic layout exactly.',
+                default                                 => 'Top-down render with each module placed at the exact layout coordinates.',
+            };
+            $pdf->paragraph($caption, 9.5);
+        }
+
+        $secondary = null;
+        if ($heroPath === $s->realAerial3dImagePath && $s->staticMap3dImagePath !== null) {
+            $secondary = $this->loadImage($s->projectId, $s->staticMap3dImagePath);
+            $secondaryCaption = 'Same layout projected onto the Google Maps satellite tile and sent through Gemini for a second 3D perspective.';
+        } elseif ($heroPath !== $s->render3dImagePath && $s->render3dImagePath !== null) {
+            $secondary = $this->loadImage($s->projectId, $s->render3dImagePath);
+            $secondaryCaption = 'Deterministic synthetic 3D render — useful for verifying panel geometry independently of any photo source.';
+        }
+        if ($secondary !== null) {
+            $pdf->image($secondary, null, 220.0);
+            $pdf->paragraph($secondaryCaption ?? '', 9.0);
         }
 
         $pdf->heading('System at a glance')

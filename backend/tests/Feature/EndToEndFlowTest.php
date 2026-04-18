@@ -62,15 +62,22 @@ class EndToEndFlowTest extends TestCase
         $this->assertGreaterThan(0, $layout['annual_kwh']);
         $this->assertStatus($projectId, 'layout_ready');
 
-        // 5. Rendering pipeline — base + overlay + top-down + 3D aerial Gemini (fake) renders.
+        // 5. Rendering pipeline — synthetic + real-aerial + satellite composites with 3D Gemini passes.
         $this->postJson("/api/v1/projects/{$projectId}/generate-render")
             ->assertOk()
             ->assertJsonStructure(['data' => ['images' => [
                 'roof_base', 'roof_overlay', 'roof_render', 'roof_render_3d',
+                'real_aerial_overlay', 'real_aerial_render_3d',
+                'static_map_base', 'static_map_overlay', 'static_map_render_3d',
             ]]]);
         $this->assertStatus($projectId, 'render_ready');
 
-        foreach (['roof_base.png', 'roof_overlay.png', 'roof_render.png', 'roof_render_3d.png'] as $name) {
+        $renderPngs = [
+            'roof_base.png', 'roof_overlay.png', 'roof_render.png', 'roof_render_3d.png',
+            'real_aerial_overlay.png', 'real_aerial_render_3d.png',
+            'static_map_base.png', 'static_map_overlay.png', 'static_map_render_3d.png',
+        ];
+        foreach ($renderPngs as $name) {
             $bytes = (string) $disk->get("projects/{$projectId}/render/{$name}");
             $this->assertSame("\x89PNG\r\n\x1a\n", substr($bytes, 0, 8), "{$name} is not a valid PNG");
         }
@@ -111,12 +118,19 @@ class EndToEndFlowTest extends TestCase
             'solar/images/rgb.png',
             'solar/images/mask.png',
             'solar/images/flux.png',
+            'solar/images/aerial_geo.json',
             'layout/panel_coordinates.txt',
             'layout/layout_summary.txt',
             'render/roof_base.png',
             'render/roof_overlay.png',
             'render/roof_render.png',
             'render/roof_render_3d.png',
+            'render/real_aerial_overlay.png',
+            'render/real_aerial_render_3d.png',
+            'render/static_map_base.png',
+            'render/static_map_overlay.png',
+            'render/static_map_render_3d.png',
+            'render/static_map_geo.json',
             'render/gemini_prompt.txt',
             'render/gemini_prompt_3d.txt',
             'render/render_notes.txt',
@@ -140,8 +154,10 @@ class EndToEndFlowTest extends TestCase
             $img->assertHeader('Content-Type', 'image/png');
             $this->assertSame("\x89PNG\r\n\x1a\n", substr((string) $img->getContent(), 0, 8));
         }
-        $r3d = $this->get("/api/v1/projects/{$projectId}/render/images/roof_render_3d.png")->assertOk();
-        $r3d->assertHeader('Content-Type', 'image/png');
+        foreach (['roof_render_3d.png', 'real_aerial_render_3d.png', 'static_map_render_3d.png'] as $rname) {
+            $resp = $this->get("/api/v1/projects/{$projectId}/render/images/{$rname}")->assertOk();
+            $resp->assertHeader('Content-Type', 'image/png');
+        }
 
         // 10. HTML + PDF endpoints stream the generated files, including the new imagery.
         $html = $this->get("/api/v1/projects/{$projectId}/proposal/html")->assertOk();
@@ -149,7 +165,8 @@ class EndToEndFlowTest extends TestCase
         $this->assertStringContainsString('Rooftop solar proposal', $htmlBody);
         $this->assertStringContainsString('data:image/png;base64,', $htmlBody);
         $this->assertStringContainsString('Roof imagery from Google Solar', $htmlBody);
-        $this->assertStringContainsString('Aerial 3D render', $htmlBody);
+        $this->assertStringContainsString('Google Solar RGB', $htmlBody);
+        $this->assertStringContainsString('Google Maps satellite tile', $htmlBody);
 
         $pdf = $this->get("/api/v1/projects/{$projectId}/proposal/pdf")->assertOk();
         $pdf->assertHeader('Content-Type', 'application/pdf');

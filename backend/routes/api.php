@@ -32,7 +32,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/projects/{projectId}/generate-render', [RenderController::class, 'generate']);
     Route::get('/projects/{projectId}/render', [RenderController::class, 'show']);
     Route::get('/projects/{projectId}/render/images/{name}', [RenderController::class, 'image'])
-        ->where('name', 'roof_(base|overlay|render|render_3d)\.png');
+        ->where('name', '(roof_(base|overlay|render|render_3d)|real_aerial_overlay|real_aerial_render_3d|static_map_base|static_map_overlay|static_map_render_3d)\.png');
 
     Route::post('/projects/{projectId}/generate-pricing', [PricingController::class, 'generate']);
     Route::get('/projects/{projectId}/pricing', [PricingController::class, 'show']);

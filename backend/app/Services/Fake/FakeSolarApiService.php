@@ -130,6 +130,18 @@ final class FakeSolarApiService implements SolarApiServiceInterface
         $this->projects->writeBinary($projectId, 'solar/images/rgb.png',  $rgb);
         $this->projects->writeBinary($projectId, 'solar/images/mask.png', $mask);
         $this->projects->writeBinary($projectId, 'solar/images/flux.png', $flux);
+
+        $radiusM = 25.0;
+        $this->projects->writeJson($projectId, 'solar/images/aerial_geo.json', [
+            'source'           => 'fake.solar.rgb',
+            'center_lat'       => $candidate->lat,
+            'center_lng'       => $candidate->lng,
+            'radius_meters'    => $radiusM,
+            'width_px'         => 384,
+            'height_px'        => 384,
+            'meters_per_pixel' => ($radiusM * 2.0) / 384,
+        ]);
+
         $this->status->apiCall($projectId, 'fake.dataLayers.imagery', 200, 0.0, 'generated=3');
 
         return [

@@ -55,18 +55,21 @@ class ProposalFlowTest extends TestCase
         $this->assertStringContainsString('/Subtype /Image', $pdf);
         $this->assertStringContainsString('/Filter /DCTDecode', $pdf);
 
-        // HTML contains the render images and the new solar imagery section
+        // HTML contains the render images and the new real-photo + solar imagery sections
         $html = (string) $disk->get("{$base}/proposal.html");
         $this->assertStringContainsString('data:image/png;base64,', $html);
         $this->assertStringContainsString('Rooftop solar proposal', $html);
         $this->assertStringContainsString('Roof imagery from Google Solar', $html);
-        $this->assertStringContainsString('Aerial 3D render', $html);
+        $this->assertStringContainsString('Google Solar RGB', $html);
+        $this->assertStringContainsString('Google Maps satellite tile', $html);
 
         // Summary JSON records the extra image paths
         $summary = json_decode((string) $disk->get("{$base}/proposal_summary.json"), true);
         $this->assertSame('render/roof_render_3d.png', $summary['render_3d_image'] ?? null);
         $this->assertSame('solar/images/rgb.png', $summary['aerial_image'] ?? null);
         $this->assertSame('solar/images/flux.png', $summary['flux_image'] ?? null);
+        $this->assertSame('render/real_aerial_render_3d.png', $summary['real_aerial_3d_image'] ?? null);
+        $this->assertSame('render/static_map_render_3d.png', $summary['static_map_3d_image'] ?? null);
 
         // Savings forecast persisted alongside pricing
         $this->assertTrue($disk->exists("projects/{$projectId}/pricing/savings_forecast.json"));

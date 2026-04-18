@@ -35,7 +35,11 @@ class RenderController extends Controller
     public function image(string $projectId, string $name): Response
     {
         $this->ensureExists($projectId);
-        $allowed = ['roof_base.png', 'roof_overlay.png', 'roof_render.png', 'roof_render_3d.png'];
+        $allowed = [
+            'roof_base.png', 'roof_overlay.png', 'roof_render.png', 'roof_render_3d.png',
+            'real_aerial_overlay.png', 'real_aerial_render_3d.png',
+            'static_map_base.png', 'static_map_overlay.png', 'static_map_render_3d.png',
+        ];
         if (!in_array($name, $allowed, true)) {
             abort(404);
         }
@@ -53,16 +57,23 @@ class RenderController extends Controller
     private function payload(string $projectId, string $notes): array
     {
         $base = "/api/v1/projects/{$projectId}/render/images/";
+        $url = fn (string $name): ?string =>
+            $this->projects->readBinary($projectId, 'render/'.$name) ? $base.$name : null;
         return [
             'project_id' => $projectId,
             'notes' => $notes,
             'prompt' => $this->projects->readText($projectId, 'render/gemini_prompt.txt'),
             'prompt_3d' => $this->projects->readText($projectId, 'render/gemini_prompt_3d.txt'),
             'images' => [
-                'roof_base'       => $this->projects->readBinary($projectId, 'render/roof_base.png')       ? $base.'roof_base.png'       : null,
-                'roof_overlay'    => $this->projects->readBinary($projectId, 'render/roof_overlay.png')    ? $base.'roof_overlay.png'    : null,
-                'roof_render'     => $this->projects->readBinary($projectId, 'render/roof_render.png')     ? $base.'roof_render.png'     : null,
-                'roof_render_3d'  => $this->projects->readBinary($projectId, 'render/roof_render_3d.png')  ? $base.'roof_render_3d.png'  : null,
+                'roof_base'              => $url('roof_base.png'),
+                'roof_overlay'           => $url('roof_overlay.png'),
+                'roof_render'            => $url('roof_render.png'),
+                'roof_render_3d'         => $url('roof_render_3d.png'),
+                'real_aerial_overlay'    => $url('real_aerial_overlay.png'),
+                'real_aerial_render_3d'  => $url('real_aerial_render_3d.png'),
+                'static_map_base'        => $url('static_map_base.png'),
+                'static_map_overlay'     => $url('static_map_overlay.png'),
+                'static_map_render_3d'   => $url('static_map_render_3d.png'),
             ],
         ];
     }

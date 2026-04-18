@@ -114,10 +114,14 @@ final class GoogleSolarApiService implements SolarApiServiceInterface
 
         $rgbTiff = $this->fetchTiff($projectId, 'rgb', $payload['rgbUrl'] ?? null, $key);
         if ($rgbTiff !== null) {
+            $this->projects->writeBinary($projectId, 'solar/images/rgb.tif', $rgbTiff);
             $saved['rgb'] = $this->convertAndStore(
                 $projectId, 'rgb.png',
                 fn () => TiffPreview::rgbToPng($rgbTiff),
             );
+            if ($saved['rgb'] !== null) {
+                $this->writeAerialGeo($projectId, $candidate, $saved['rgb']);
+            }
         }
 
         $maskTiff = $this->fetchTiff($projectId, 'mask', $payload['maskUrl'] ?? null, $key);
@@ -173,6 +177,35 @@ final class GoogleSolarApiService implements SolarApiServiceInterface
         $this->projects->writeBinary($projectId, 'solar/images/'.$filename, $png);
         $this->status->progress($projectId, 'solar.imagery saved '.$filename.' bytes='.strlen($png));
         return 'solar/images/'.$filename;
+    }
+
+    private function writeAerialGeo(string $projectId, Candidate $candidate, string $rgbRelative): void
+    {
+        $png = $this->projects->readBinary($projectId, $rgbRelative);
+        if ($png === null) {
+            return;
+        }
+        $img = @imagecreatefromstring($png);
+        if ($img === false) {
+            return;
+        }
+        $w = imagesx($img);
+        $h = imagesy($img);
+        imagedestroy($img);
+
+        $radiusM = 25.0; // request radius — DataLayers returns a square tile
+        $diameter = $radiusM * 2.0;
+        $mpp = $diameter / max($w, $h);
+
+        $this->projects->writeJson($projectId, 'solar/images/aerial_geo.json', [
+            'source'           => 'google.solar.rgb',
+            'center_lat'       => $candidate->lat,
+            'center_lng'       => $candidate->lng,
+            'radius_meters'    => $radiusM,
+            'width_px'         => $w,
+            'height_px'        => $h,
+            'meters_per_pixel' => $mpp,
+        ]);
     }
 
     /** @param array<string, mixed>|null $body */

@@ -108,18 +108,35 @@
     </div>
   </div>
 
+  @if ($realAerial3dDataUri || $staticMap3dDataUri)
+    <div class="render-pair">
+      @if ($realAerial3dDataUri)
+        <div class="render">
+          <img src="{{ $realAerial3dDataUri }}" alt="3D render over Solar aerial">
+          <div class="caption">Panels on the actual rooftop (Google Solar RGB → Gemini 3D perspective).</div>
+        </div>
+      @endif
+      @if ($staticMap3dDataUri)
+        <div class="render">
+          <img src="{{ $staticMap3dDataUri }}" alt="3D render over satellite tile">
+          <div class="caption">Panels on the Google Maps satellite tile → Gemini 3D perspective.</div>
+        </div>
+      @endif
+    </div>
+  @endif
+
   @if ($renderDataUri || $render3dDataUri)
     <div class="render-pair">
       @if ($renderDataUri)
         <div class="render">
           <img src="{{ $renderDataUri }}" alt="Top-down render">
-          <div class="caption">Top-down render — panel geometry is deterministic, realism is AI-enhanced.</div>
+          <div class="caption">Synthetic top-down render — panel geometry is deterministic, realism is AI-enhanced.</div>
         </div>
       @endif
       @if ($render3dDataUri)
         <div class="render">
           <img src="{{ $render3dDataUri }}" alt="3D aerial render">
-          <div class="caption">Aerial 3D render (Gemini) — same panel grid seen from a drone-height perspective.</div>
+          <div class="caption">Synthetic aerial 3D render (Gemini) — same panel grid seen from a drone-height perspective.</div>
         </div>
       @endif
     </div>

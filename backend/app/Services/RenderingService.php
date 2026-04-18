@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\DTOs\PanelPlacement;
 use App\DTOs\RoofLayout;
 use App\DTOs\SegmentLayout;
 use App\Repositories\ProjectFileRepository;
 use App\Services\Contracts\GeminiImageServiceInterface;
+use App\Services\Contracts\StaticMapsServiceInterface;
+use App\Support\PanelCompositor;
 use GdImage;
 use RuntimeException;
+use Throwable;
 
 /**
  * Turns the deterministic layout into four PNGs:
@@ -38,6 +40,7 @@ final class RenderingService
         private readonly ProjectFileRepository $projects,
         private readonly StatusFileService $status,
         private readonly GeminiImageServiceInterface $gemini,
+        private readonly StaticMapsServiceInterface $staticMaps,
     ) {
     }
 
@@ -91,11 +94,108 @@ final class RenderingService
             $renderNotes .= "\nenhanced_3d:\n  renderer: fallback_top_down\n  error: ".$e->getMessage()."\n";
         }
 
+        $renderNotes .= $this->renderRealPhotoComposites($projectId, $layout);
+
         $this->projects->writeText($projectId, 'render/render_notes.txt', $renderNotes);
         $this->status->setStatus($projectId, StatusFileService::STATUS_RENDER_READY,
             'panels='.$layout->totalPanels);
 
         return $renderNotes;
+    }
+
+    /**
+     * Builds two real-photo composites (Solar API aerial + Static Maps
+     * satellite) with panel rectangles projected via lat/lng, then feeds
+     * each to Gemini for a 3D perspective hero render. Failures are
+     * non-fatal — the synthetic top-down remains the guaranteed output.
+     */
+    private function renderRealPhotoComposites(string $projectId, RoofLayout $layout): string
+    {
+        $insights = $this->projects->readBuildingInsights($projectId);
+        $candidate = $this->projects->readSelectedCandidate($projectId);
+        if ($insights === null || $candidate === null) {
+            return "\nreal_photo:\n  skipped: no building insights or candidate\n";
+        }
+
+        $notes = '';
+        $prompt3d = $this->prompt3d();
+
+        // --- 1) Solar API RGB aerial --------------------------------------
+        $aerialPng = $this->projects->readBinary($projectId, 'solar/images/rgb.png');
+        $aerialGeo = $this->projects->readJson($projectId, 'solar/images/aerial_geo.json');
+        if ($aerialPng !== null && is_array($aerialGeo)) {
+            try {
+                $overlay = PanelCompositor::compose(
+                    $aerialPng, $layout, $insights,
+                    [
+                        'center_lat'       => (float)($aerialGeo['center_lat'] ?? 0),
+                        'center_lng'       => (float)($aerialGeo['center_lng'] ?? 0),
+                        'width_px'         => (int)($aerialGeo['width_px'] ?? 0),
+                        'height_px'        => (int)($aerialGeo['height_px'] ?? 0),
+                        'meters_per_pixel' => (float)($aerialGeo['meters_per_pixel'] ?? 0.15),
+                    ],
+                    'Solar aerial',
+                );
+                $this->projects->writeBinary($projectId, 'render/real_aerial_overlay.png', $overlay);
+                $notes .= $this->enhance3d($projectId, 'real_aerial', $overlay, $prompt3d);
+            } catch (Throwable $e) {
+                $this->status->error($projectId, 'render.real_aerial_compose failed', $e);
+                $notes .= "\nreal_aerial:\n  compose_error: ".$e->getMessage()."\n";
+            }
+        } else {
+            $notes .= "\nreal_aerial:\n  skipped: solar/images/rgb.png or aerial_geo.json missing\n";
+        }
+
+        // --- 2) Static Maps satellite tile --------------------------------
+        try {
+            $tile = $this->staticMaps->fetchSatelliteTile(
+                $projectId, $candidate->lat, $candidate->lng, 20, 640,
+            );
+            $this->projects->writeBinary($projectId, 'render/static_map_base.png', (string) $tile['bytes']);
+            $this->projects->writeJson($projectId, 'render/static_map_geo.json', [
+                'source'           => 'google.staticMaps.satellite',
+                'center_lat'       => $tile['center_lat'],
+                'center_lng'       => $tile['center_lng'],
+                'zoom'             => $tile['zoom'],
+                'width_px'         => $tile['width'],
+                'height_px'        => $tile['height'],
+                'meters_per_pixel' => $tile['meters_per_pixel'],
+            ]);
+
+            $overlay = PanelCompositor::compose(
+                (string) $tile['bytes'], $layout, $insights,
+                [
+                    'center_lat'       => (float) $tile['center_lat'],
+                    'center_lng'       => (float) $tile['center_lng'],
+                    'width_px'         => (int) $tile['width'],
+                    'height_px'        => (int) $tile['height'],
+                    'meters_per_pixel' => (float) $tile['meters_per_pixel'],
+                ],
+                'Satellite tile',
+            );
+            $this->projects->writeBinary($projectId, 'render/static_map_overlay.png', $overlay);
+            $notes .= $this->enhance3d($projectId, 'static_map', $overlay, $prompt3d);
+        } catch (Throwable $e) {
+            $this->status->error($projectId, 'render.static_map failed', $e);
+            $notes .= "\nstatic_map:\n  fetch_or_compose_error: ".$e->getMessage()."\n";
+        }
+
+        return $notes;
+    }
+
+    private function enhance3d(string $projectId, string $label, string $overlayPng, string $prompt): string
+    {
+        $outFile = 'render/'.$label.'_render_3d.png';
+        try {
+            $result = $this->gemini->enhance($overlayPng, $prompt);
+            $this->projects->writeBinary($projectId, $outFile, $result['bytes']);
+            $this->status->progress($projectId, "render.enhance_3d {$label} ok bytes=".strlen($result['bytes']));
+            return "\n{$label}_3d:\n".$result['notes'];
+        } catch (Throwable $e) {
+            $this->status->error($projectId, "render.enhance_3d {$label} failed, falling back to overlay", $e);
+            $this->projects->writeBinary($projectId, $outFile, $overlayPng);
+            return "\n{$label}_3d:\n  renderer: fallback_overlay\n  error: ".$e->getMessage()."\n";
+        }
     }
 
     public function prompt(): string

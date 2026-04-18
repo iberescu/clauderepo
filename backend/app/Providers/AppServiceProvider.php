@@ -6,14 +6,17 @@ use App\Services\Contracts\CandidateDiscoveryServiceInterface;
 use App\Services\Contracts\GeminiImageServiceInterface;
 use App\Services\Contracts\GeoSearchServiceInterface;
 use App\Services\Contracts\SolarApiServiceInterface;
+use App\Services\Contracts\StaticMapsServiceInterface;
 use App\Services\Fake\FakeCandidateDiscoveryService;
 use App\Services\Fake\FakeGeminiImageService;
 use App\Services\Fake\FakeGeoSearchService;
 use App\Services\Fake\FakeSolarApiService;
+use App\Services\Fake\FakeStaticMapsService;
 use App\Services\Google\GoogleCandidateDiscoveryService;
 use App\Services\Google\GoogleGeminiImageService;
 use App\Services\Google\GoogleGeoSearchService;
 use App\Services\Google\GoogleSolarApiService;
+use App\Services\Google\GoogleStaticMapsService;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -37,6 +40,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(GeminiImageServiceInterface::class, $useFakes
             ? FakeGeminiImageService::class
             : GoogleGeminiImageService::class);
+
+        $this->app->bind(StaticMapsServiceInterface::class, $useFakes
+            ? FakeStaticMapsService::class
+            : GoogleStaticMapsService::class);
     }
 
     public function boot(): void

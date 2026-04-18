@@ -15,6 +15,10 @@ const store = useProjectStore()
 const busy = ref(null)
 const renderImage = ref(null)
 const render3dImage = ref(null)
+const realAerialOverlay = ref(null)
+const realAerial3d = ref(null)
+const staticMapOverlay = ref(null)
+const staticMap3d = ref(null)
 const solarImagery = ref({ rgb: null, mask: null, flux: null })
 
 const hasAnalysis = computed(() => store.hasReached('analysis_ready'))
@@ -23,9 +27,22 @@ const hasRender = computed(() => store.hasReached('render_ready'))
 
 async function refreshRenderImage() {
   if (!hasRender.value) return
-  const ts = Date.now()
-  renderImage.value = api.renderImageUrl(props.id, 'roof_render.png') + '?ts=' + ts
-  render3dImage.value = api.renderImageUrl(props.id, 'roof_render_3d.png') + '?ts=' + ts
+  try {
+    const r = await api.render(props.id)
+    const imgs = r?.images || {}
+    const ts = Date.now()
+    const cacheBust = (url) => (url ? url + '?ts=' + ts : null)
+    renderImage.value      = cacheBust(imgs.roof_render)
+    render3dImage.value    = cacheBust(imgs.roof_render_3d)
+    realAerialOverlay.value = cacheBust(imgs.real_aerial_overlay)
+    realAerial3d.value      = cacheBust(imgs.real_aerial_render_3d)
+    staticMapOverlay.value  = cacheBust(imgs.static_map_overlay)
+    staticMap3d.value       = cacheBust(imgs.static_map_render_3d)
+  } catch {
+    const ts = Date.now()
+    renderImage.value = api.renderImageUrl(props.id, 'roof_render.png') + '?ts=' + ts
+    render3dImage.value = api.renderImageUrl(props.id, 'roof_render_3d.png') + '?ts=' + ts
+  }
 }
 
 async function refreshSolarImagery() {
@@ -192,19 +209,51 @@ function go() {
         Panels are drawn from the exact coordinates above; Gemini enhances realism but cannot move any module. If the AI call fails, the deterministic overlay is preserved.
       </p>
 
-      <div v-if="hasRender" class="grid md:grid-cols-2 gap-4">
-        <figure class="space-y-1">
-          <div class="rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
-            <img :src="renderImage" alt="Top-down render" class="w-full h-auto object-contain max-h-[420px] mx-auto" />
-          </div>
-          <figcaption class="text-[11px] text-slate-500 text-center">Top-down render</figcaption>
-        </figure>
-        <figure class="space-y-1">
-          <div class="rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
-            <img :src="render3dImage" alt="3D aerial render" class="w-full h-auto object-contain max-h-[420px] mx-auto" />
-          </div>
-          <figcaption class="text-[11px] text-slate-500 text-center">3D aerial render (Gemini)</figcaption>
-        </figure>
+      <div v-if="hasRender" class="space-y-6">
+        <div class="grid md:grid-cols-2 gap-4">
+          <figure class="space-y-1">
+            <div class="rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+              <img :src="renderImage" alt="Top-down render" class="w-full h-auto object-contain max-h-[420px] mx-auto" />
+            </div>
+            <figcaption class="text-[11px] text-slate-500 text-center">Synthetic top-down render</figcaption>
+          </figure>
+          <figure class="space-y-1">
+            <div class="rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+              <img :src="render3dImage" alt="3D aerial render" class="w-full h-auto object-contain max-h-[420px] mx-auto" />
+            </div>
+            <figcaption class="text-[11px] text-slate-500 text-center">Synthetic 3D aerial render (Gemini)</figcaption>
+          </figure>
+        </div>
+
+        <div v-if="realAerialOverlay || realAerial3d" class="grid md:grid-cols-2 gap-4">
+          <figure v-if="realAerialOverlay" class="space-y-1">
+            <div class="rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+              <img :src="realAerialOverlay" alt="Panels on Solar aerial" class="w-full h-auto object-contain max-h-[420px] mx-auto" />
+            </div>
+            <figcaption class="text-[11px] text-slate-500 text-center">Panels on Solar API aerial (top-down)</figcaption>
+          </figure>
+          <figure v-if="realAerial3d" class="space-y-1">
+            <div class="rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+              <img :src="realAerial3d" alt="3D over Solar aerial" class="w-full h-auto object-contain max-h-[420px] mx-auto" />
+            </div>
+            <figcaption class="text-[11px] text-slate-500 text-center">Solar aerial → 3D (Gemini)</figcaption>
+          </figure>
+        </div>
+
+        <div v-if="staticMapOverlay || staticMap3d" class="grid md:grid-cols-2 gap-4">
+          <figure v-if="staticMapOverlay" class="space-y-1">
+            <div class="rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+              <img :src="staticMapOverlay" alt="Panels on satellite tile" class="w-full h-auto object-contain max-h-[420px] mx-auto" />
+            </div>
+            <figcaption class="text-[11px] text-slate-500 text-center">Panels on Static Maps satellite (top-down)</figcaption>
+          </figure>
+          <figure v-if="staticMap3d" class="space-y-1">
+            <div class="rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+              <img :src="staticMap3d" alt="3D over satellite tile" class="w-full h-auto object-contain max-h-[420px] mx-auto" />
+            </div>
+            <figcaption class="text-[11px] text-slate-500 text-center">Satellite → 3D (Gemini)</figcaption>
+          </figure>
+        </div>
       </div>
       <div v-else class="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-400">
         Render not generated yet.
