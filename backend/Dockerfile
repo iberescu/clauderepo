@@ -29,6 +29,10 @@ RUN apk add --no-cache \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# Raise memory + execution limits so Gemini base64 payloads and GD
+# compositing don't trip PHP's defaults during a live render.
+COPY docker/php-overrides.ini /usr/local/etc/php/conf.d/zz-solar-overrides.ini
+
 WORKDIR /app
 
 # Install dependencies first so the vendor layer is cached across source edits.
