@@ -23,27 +23,23 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $useFakes = (bool) config('solar.fake_providers', true);
+        // Re-read `solar.fake_providers` at resolve time so tests that flip
+        // the flag in setUp() get the right implementation, and a
+        // config/secrets.php edit does not require a rebuild of the
+        // service container.
+        $this->bindProvider(GeoSearchServiceInterface::class, FakeGeoSearchService::class, GoogleGeoSearchService::class);
+        $this->bindProvider(CandidateDiscoveryServiceInterface::class, FakeCandidateDiscoveryService::class, GoogleCandidateDiscoveryService::class);
+        $this->bindProvider(SolarApiServiceInterface::class, FakeSolarApiService::class, GoogleSolarApiService::class);
+        $this->bindProvider(GeminiImageServiceInterface::class, FakeGeminiImageService::class, GoogleGeminiImageService::class);
+        $this->bindProvider(StaticMapsServiceInterface::class, FakeStaticMapsService::class, GoogleStaticMapsService::class);
+    }
 
-        $this->app->bind(GeoSearchServiceInterface::class, $useFakes
-            ? FakeGeoSearchService::class
-            : GoogleGeoSearchService::class);
-
-        $this->app->bind(CandidateDiscoveryServiceInterface::class, $useFakes
-            ? FakeCandidateDiscoveryService::class
-            : GoogleCandidateDiscoveryService::class);
-
-        $this->app->bind(SolarApiServiceInterface::class, $useFakes
-            ? FakeSolarApiService::class
-            : GoogleSolarApiService::class);
-
-        $this->app->bind(GeminiImageServiceInterface::class, $useFakes
-            ? FakeGeminiImageService::class
-            : GoogleGeminiImageService::class);
-
-        $this->app->bind(StaticMapsServiceInterface::class, $useFakes
-            ? FakeStaticMapsService::class
-            : GoogleStaticMapsService::class);
+    private function bindProvider(string $interface, string $fake, string $live): void
+    {
+        $this->app->bind($interface, function ($app) use ($fake, $live) {
+            $useFakes = (bool) config('solar.fake_providers', true);
+            return $app->make($useFakes ? $fake : $live);
+        });
     }
 
     public function boot(): void

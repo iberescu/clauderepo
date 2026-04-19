@@ -1,5 +1,12 @@
 <?php
 
+// Runtime credentials live in config/secrets.php (or secrets.php.example for
+// new checkouts) and win unconditionally over environment variables. This
+// avoids the docker-compose env-override trap where `FAKE_PROVIDERS: true`
+// silently shadowed a backend/.env edit.
+$secretsFile = __DIR__.'/secrets.php';
+$secrets = file_exists($secretsFile) ? require $secretsFile : require __DIR__.'/secrets.php.example';
+
 return [
 
     /*
@@ -9,16 +16,16 @@ return [
     |
     | When `fake_providers` is true the app uses deterministic in-process
     | doubles for Google Maps, the Solar API and Gemini so the whole flow
-    | runs offline. Set FAKE_PROVIDERS=false in .env and provide real keys
-    | to hit the live endpoints.
+    | runs offline. Flip the value in config/secrets.php to go live — no
+    | environment variable needed.
     |
     */
 
-    'fake_providers' => env('FAKE_PROVIDERS', true),
+    'fake_providers' => (bool) ($secrets['fake_providers'] ?? true),
 
     'google' => [
-        'maps_api_key'  => env('GOOGLE_MAPS_API_KEY'),
-        'solar_api_key' => env('GOOGLE_SOLAR_API_KEY'),
+        'maps_api_key'  => (string) ($secrets['google_maps_api_key']  ?? ''),
+        'solar_api_key' => (string) ($secrets['google_solar_api_key'] ?? ''),
         'solar_endpoint' => env(
             'GOOGLE_SOLAR_ENDPOINT',
             'https://solar.googleapis.com/v1',
@@ -34,7 +41,7 @@ return [
     ],
 
     'gemini' => [
-        'api_key' => env('GEMINI_API_KEY'),
+        'api_key' => (string) ($secrets['gemini_api_key'] ?? ''),
         'endpoint' => env(
             'GEMINI_ENDPOINT',
             'https://generativelanguage.googleapis.com/v1beta',
