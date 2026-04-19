@@ -83,12 +83,15 @@ final class TiffPreview
         try {
             file_put_contents($in, $fluxTiffBytes);
 
-            // 3-stop palette (blue → yellow → red) built with sparse-color +
-            // barycentric interpolation over a 256×1 strip. Rotated into a
-            // vertical lookup table that ImageMagick `-clut` expects.
+            // 3-stop palette (blue → yellow → red) built with sparse-color
+            // over a 256×1 strip, rotated into a vertical lookup table that
+            // ImageMagick `-clut` expects. `shepards` (inverse-distance) is
+            // used instead of `barycentric` because our three seed points at
+            // (0,0) (128,0) (255,0) are collinear, which makes the barycentric
+            // solver fail with "Unsolvable Matrix".
             self::execute([
                 $magick, '-size', '256x1', 'xc:',
-                '-sparse-color', 'barycentric',
+                '-sparse-color', 'shepards',
                 '0,0 #0b3d91 128,0 #f9d423 255,0 #b30000',
                 '-rotate', '90', $grad,
             ]);

@@ -8,10 +8,17 @@
 
 FROM php:8.4-cli-alpine
 
+# imagemagick-tiff + tiff supply the libtiff delegate ImageMagick needs to
+# decode the GeoTIFFs the Solar API's Data Layers endpoint returns; without
+# them `magick` fails with "no decode delegate for this image format" and the
+# rgb/mask/flux PNG conversions never run.
 RUN apk add --no-cache \
         git \
         unzip \
         imagemagick \
+        imagemagick-tiff \
+        imagemagick-jpeg \
+        tiff \
         libzip-dev \
         libpng-dev \
         libjpeg-turbo-dev \
