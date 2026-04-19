@@ -25,6 +25,11 @@ services:
       GOOGLE_MAPS_API_KEY: "${GOOGLE_MAPS_API_KEY:-}"
       GOOGLE_SOLAR_API_KEY: "${GOOGLE_SOLAR_API_KEY:-}"
       GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      # Rendering now issues up to 4 Gemini calls per project (synthetic
+      # top-down + 3D, real-aerial 3D, satellite-tile 3D). Give artisan
+      # serve enough workers to keep status polling + health checks
+      # responsive while a render is in flight.
+      PHP_CLI_SERVER_WORKERS: "4"
     ports:
       - "8000:8000"
     volumes:
