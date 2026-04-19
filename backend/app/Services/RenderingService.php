@@ -398,9 +398,12 @@ PROMPT;
                 continue;
             }
             $px = $rect['x'] + (int) round($p->x * self::SCALE_PX_PER_M);
-            $py = $rect['y'] + (int) round($p->y * self::SCALE_PX_PER_M);
             $pw = (int) round($p->width * self::SCALE_PX_PER_M);
             $ph = (int) round($p->height * self::SCALE_PX_PER_M);
+            // PanelPlacement y is measured from the segment SW corner (y grows
+            // north); the GD canvas origin is top-left (y grows south). Flip so
+            // panels stay inside the segment rectangle.
+            $py = $rect['y'] + $rect['h'] - (int) round(($p->y + $p->height) * self::SCALE_PX_PER_M);
 
             imagefilledrectangle($img, $px, $py, $px + $pw, $py + $ph, $panelFill);
             imagerectangle($img, $px, $py, $px + $pw, $py + $ph, $panelFrame);
