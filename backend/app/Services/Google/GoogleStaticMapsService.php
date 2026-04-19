@@ -53,10 +53,18 @@ final class GoogleStaticMapsService implements StaticMapsServiceInterface
             throw new RuntimeException('Static Maps request failed: '.$e->getMessage(), 0, $e);
         }
         $duration = (microtime(true) - $started) * 1000;
-        $this->status->apiCall($projectId, 'google.staticMaps', $resp->status(), $duration, "zoom={$zoom}");
+        $note = "zoom={$zoom}";
+        if (!$resp->ok()) {
+            $snippet = substr((string) $resp->body(), 0, 200);
+            $snippet = preg_replace('/\s+/', ' ', $snippet) ?? '';
+            $note .= ' body='.$snippet;
+        }
+        $this->status->apiCall($projectId, 'google.staticMaps', $resp->status(), $duration, $note);
 
         if (!$resp->ok()) {
-            throw new RuntimeException('Static Maps HTTP '.$resp->status());
+            $body = substr((string) $resp->body(), 0, 200);
+            $body = preg_replace('/\s+/', ' ', $body) ?? '';
+            throw new RuntimeException('Static Maps HTTP '.$resp->status().': '.$body);
         }
 
         $bytes = (string) $resp->body();

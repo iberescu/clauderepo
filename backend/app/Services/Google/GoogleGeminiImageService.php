@@ -47,7 +47,9 @@ final class GoogleGeminiImageService implements GeminiImageServiceInterface
             ->post($endpoint, $payload);
 
         if (!$resp->ok()) {
-            throw new RuntimeException('Gemini image request failed: HTTP '.$resp->status());
+            $snippet = substr((string) $resp->body(), 0, 300);
+            $snippet = preg_replace('/\s+/', ' ', $snippet) ?? '';
+            throw new RuntimeException('Gemini image request failed: HTTP '.$resp->status().': '.$snippet);
         }
 
         $body = $resp->json();
