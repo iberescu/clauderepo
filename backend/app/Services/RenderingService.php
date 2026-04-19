@@ -80,7 +80,7 @@ final class RenderingService
             $renderNotes .= "\nenhanced:\n  renderer: fallback_overlay\n  error: ".$e->getMessage()."\n";
         }
 
-        $prompt3d = $this->prompt3d();
+        $prompt3d = $this->prompt3d($layout);
         $this->projects->writeText($projectId, 'render/gemini_prompt_3d.txt', $prompt3d);
         try {
             $result3d = $this->geminiEnhance($projectId, 'gemini.enhance_synthetic_3d', $overlayPng, $prompt3d);
@@ -118,7 +118,7 @@ final class RenderingService
         }
 
         $notes = '';
-        $prompt3d = $this->prompt3d();
+        $prompt3d = $this->prompt3d($layout);
 
         // --- 1) Solar API RGB aerial --------------------------------------
         $aerialPng = $this->projects->readBinary($projectId, 'solar/images/rgb.png');
@@ -233,47 +233,72 @@ Keep dark blue monocrystalline panels with silver frames.
 PROMPT;
     }
 
-    public function prompt3d(): string
+    public function prompt3d(RoofLayout $layout): string
     {
-        return <<<PROMPT
-TASK: Generate a brand-new 3D PERSPECTIVE photograph of a house. Do NOT
-return a top-down view. Do NOT return the supplied image with edits. Do NOT
-return anything that looks like a satellite or aerial-map image.
+        $totalPanels = $layout->totalPanels;
+        $segmentCount = count($layout->segments);
+        $segmentLines = [];
+        foreach ($layout->segments as $s) {
+            $segmentLines[] = sprintf(
+                '    - Segment %d: %d panels arranged %d rows x %d cols, orientation=%s',
+                $s->segmentIndex, $s->panelCount(), $s->rows, $s->cols, $s->orientation,
+            );
+        }
+        $segmentBlock = implode("\n", $segmentLines);
 
-The image I am giving you is a TOP-DOWN reference only. Its sole purpose is
-to show you where the dark-blue solar panels sit on the rooftop. You must
-reimagine this scene entirely as a ground-to-low-altitude 3D perspective
-photograph.
+        return <<<PROMPT
+TASK: Generate a brand-new 3D PERSPECTIVE photograph of ONLY THE ROOFTOP of
+a house with solar panels on it. Do NOT show the walls, doors, windows,
+ground, driveway, yard, or neighbourhood. Do NOT return a top-down view.
+Do NOT return the supplied image with edits. Do NOT return anything that
+looks like a satellite or aerial-map image.
+
+The image I am giving you is a TOP-DOWN reference only. Its sole purpose
+is to show you where the dark-blue solar panels sit on the rooftop. You
+must reimagine the rooftop entirely as a low-altitude 3D perspective
+photograph, cropped so that only the roof is visible in frame.
+
+EXACT PANEL COUNT (strict — must match):
+  - Total panels to depict: {$totalPanels}
+  - Number of roof segments: {$segmentCount}
+{$segmentBlock}
+  - The output image MUST show exactly {$totalPanels} solar panels, no
+    more, no fewer. Count them before finalising.
+  - Respect the per-segment grid (rows x cols and orientation) shown
+    above. Do not add extra rows, extra columns, or extra panels to make
+    the array look symmetric.
 
 COMPOSITION (strict):
-  - Camera at roughly 30 metres altitude, looking DOWN at the house at
-    about a 35-45 degree angle (NOT 90° / top-down, NOT isometric, NOT
-    orthographic).
-  - Camera positioned off to one side so TWO roof planes and at least ONE
-    side wall of the house are clearly visible.
-  - The ENTIRE house must be in frame: full roof, walls, windows, doors,
-    and the edge of the front yard / driveway. Not just the roof plane.
-  - Horizon visible or implied — this is a ground-world 3D scene, not a
-    top-down graphic.
+  - Camera at roughly 15-20 metres above roof level, looking DOWN at the
+    roof at about a 35-45 degree angle (NOT 90° / top-down, NOT isometric,
+    NOT orthographic).
+  - Camera positioned off to one side so TWO roof planes (ridge + slope)
+    are visible and the pitch of the roof reads as a real 3D surface.
+  - ONLY THE ROOFTOP is in frame. Crop tightly so the edges of the roof
+    meet the edges of the image, or sit against a soft neutral backdrop
+    (sky only, or blurred out-of-focus background). No walls, no gutters
+    extending down the facade, no chimneys of neighbouring houses, no
+    ground.
 
 WHAT TO DEPICT:
-  - A single detached house with a pitched rooftop.
+  - A pitched rooftop (tiled or shingled) seen from above at an angle.
   - Dark-blue monocrystalline solar panels with silver frames mounted
-    flush on the roof, in the same grid pattern and count as the reference.
+    flush on the roof, in the same grid pattern and EXACT count as the
+    reference (see EXACT PANEL COUNT above).
   - Warm late-afternoon sunlight from the upper left, realistic shadows
     cast by the panels onto the roof surface, subtle sky reflections on
     the panel glass.
-  - A softly blurred suburban neighbourhood in the background (trees,
-    other rooftops, a patch of sky).
 
 STYLE:
-  - Photorealistic, as if shot with a DSLR from a drone.
+  - Photorealistic, as if shot with a DSLR from a drone hovering just
+    above the roof ridge.
   - Marketing-quality, suitable for a solar-installation sales proposal.
 
 REJECTION CRITERIA — if your output shows any of these, you have failed
 the task:
   - A top-down / bird's-eye / orthographic / satellite-style view.
-  - Only the roof visible (no walls, no surrounding ground).
+  - Walls, windows, doors, ground, driveway, yard, or full-house views.
+  - A panel count different from {$totalPanels}.
   - The input image with panels drawn on it.
   - A flat 2D diagram or schematic.
 PROMPT;
