@@ -236,17 +236,46 @@ PROMPT;
     public function prompt3d(): string
     {
         return <<<PROMPT
-Render an aerial 3D perspective of the same rooftop seen from roughly 45
-degrees, as if taken from a low drone shot. Keep the exact panel grid
-positions from the overlay mask — do not invent additional panels or move
-existing ones. Preserve roof geometry and proportions.
-Use dark blue monocrystalline panels with silver frames.
-Use warm late-afternoon sunlight coming from the upper left, with soft
-shadows cast by the panels onto the roof surface, subtle sky reflections on
-the glass, and a clean suburban neighbourhood blurred gently in the
-background. The result should feel like a realistic sales marketing photo
-while still being clearly recognisable as the same rooftop in the supplied
-top-down mask.
+TASK: Generate a brand-new 3D PERSPECTIVE photograph of a house. Do NOT
+return a top-down view. Do NOT return the supplied image with edits. Do NOT
+return anything that looks like a satellite or aerial-map image.
+
+The image I am giving you is a TOP-DOWN reference only. Its sole purpose is
+to show you where the dark-blue solar panels sit on the rooftop. You must
+reimagine this scene entirely as a ground-to-low-altitude 3D perspective
+photograph.
+
+COMPOSITION (strict):
+  - Camera at roughly 30 metres altitude, looking DOWN at the house at
+    about a 35-45 degree angle (NOT 90° / top-down, NOT isometric, NOT
+    orthographic).
+  - Camera positioned off to one side so TWO roof planes and at least ONE
+    side wall of the house are clearly visible.
+  - The ENTIRE house must be in frame: full roof, walls, windows, doors,
+    and the edge of the front yard / driveway. Not just the roof plane.
+  - Horizon visible or implied — this is a ground-world 3D scene, not a
+    top-down graphic.
+
+WHAT TO DEPICT:
+  - A single detached house with a pitched rooftop.
+  - Dark-blue monocrystalline solar panels with silver frames mounted
+    flush on the roof, in the same grid pattern and count as the reference.
+  - Warm late-afternoon sunlight from the upper left, realistic shadows
+    cast by the panels onto the roof surface, subtle sky reflections on
+    the panel glass.
+  - A softly blurred suburban neighbourhood in the background (trees,
+    other rooftops, a patch of sky).
+
+STYLE:
+  - Photorealistic, as if shot with a DSLR from a drone.
+  - Marketing-quality, suitable for a solar-installation sales proposal.
+
+REJECTION CRITERIA — if your output shows any of these, you have failed
+the task:
+  - A top-down / bird's-eye / orthographic / satellite-style view.
+  - Only the roof visible (no walls, no surrounding ground).
+  - The input image with panels drawn on it.
+  - A flat 2D diagram or schematic.
 PROMPT;
     }
 
