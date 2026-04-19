@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectStore } from '@/stores/project'
 import api from '@/services/api'
@@ -9,14 +9,28 @@ import ErrorBanner from '@/components/ErrorBanner.vue'
 const router = useRouter()
 const store = useProjectStore()
 
+const mode = ref('address') // 'address' | 'coords'
+
 const form = ref({
   street: '',
   city: '',
   country: '',
+  lat: '',
+  lng: '',
 })
 
 const recent = ref([])
 const loadingRecent = ref(false)
+
+const canSubmit = computed(() => {
+  if (mode.value === 'address') {
+    return !!(form.value.street && form.value.city && form.value.country)
+  }
+  const lat = parseFloat(form.value.lat)
+  const lng = parseFloat(form.value.lng)
+  return Number.isFinite(lat) && Number.isFinite(lng)
+    && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+})
 
 async function loadRecent() {
   loadingRecent.value = true
@@ -36,15 +50,25 @@ onMounted(() => {
 })
 
 async function submit() {
-  if (!form.value.street || !form.value.city || !form.value.country) return
+  if (!canSubmit.value) return
+  const payload = mode.value === 'address'
+    ? { street: form.value.street, city: form.value.city, country: form.value.country }
+    : { lat: parseFloat(form.value.lat), lng: parseFloat(form.value.lng) }
   try {
-    const project = await store.createProject(form.value)
+    const project = await store.createProject(payload)
     router.push({ name: 'candidates', params: { id: project.project_id } })
   } catch { /* store.error already set */ }
 }
 
 function useExample() {
-  form.value = { street: 'Rua das Flores', city: 'Lisbon', country: 'Portugal' }
+  if (mode.value === 'address') {
+    form.value.street = 'Rua das Flores'
+    form.value.city = 'Lisbon'
+    form.value.country = 'Portugal'
+  } else {
+    form.value.lat = '38.711046'
+    form.value.lng = '-9.139968'
+  }
 }
 </script>
 
@@ -53,30 +77,62 @@ function useExample() {
     <div class="lg:col-span-3">
       <div class="card">
         <h1 class="text-2xl font-bold text-slate-900">Start a rooftop proposal</h1>
-        <p class="text-slate-500 text-sm mt-1">Enter a street address. We'll pull building insights, fit panels, and produce a branded offer in one flow.</p>
+        <p class="text-slate-500 text-sm mt-1">Enter a street address or drop in raw coordinates. We'll pull building insights, fit panels, and produce a branded offer in one flow.</p>
 
         <ErrorBanner class="mt-4" :error="store.error" @dismiss="store.error = null" />
 
-        <form class="mt-6 space-y-4" @submit.prevent="submit">
-          <div>
-            <label class="label" for="street">Street</label>
-            <input id="street" v-model="form.street" class="input" placeholder="e.g. Rua das Flores 12" required />
-          </div>
-          <div class="grid sm:grid-cols-2 gap-4">
+        <div class="mt-5 inline-flex rounded-lg border border-slate-200 p-1 bg-slate-50 text-sm">
+          <button
+            type="button"
+            class="px-3 py-1 rounded-md transition"
+            :class="mode === 'address' ? 'bg-white shadow text-slate-900 font-medium' : 'text-slate-500 hover:text-slate-700'"
+            @click="mode = 'address'"
+          >Address</button>
+          <button
+            type="button"
+            class="px-3 py-1 rounded-md transition"
+            :class="mode === 'coords' ? 'bg-white shadow text-slate-900 font-medium' : 'text-slate-500 hover:text-slate-700'"
+            @click="mode = 'coords'"
+          >Coordinates</button>
+        </div>
+
+        <form class="mt-5 space-y-4" @submit.prevent="submit">
+          <template v-if="mode === 'address'">
             <div>
-              <label class="label" for="city">City</label>
-              <input id="city" v-model="form.city" class="input" placeholder="Lisbon" required />
+              <label class="label" for="street">Street</label>
+              <input id="street" v-model="form.street" class="input" placeholder="e.g. Rua das Flores 12" required />
             </div>
-            <div>
-              <label class="label" for="country">Country</label>
-              <input id="country" v-model="form.country" class="input" placeholder="Portugal" required />
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label class="label" for="city">City</label>
+                <input id="city" v-model="form.city" class="input" placeholder="Lisbon" required />
+              </div>
+              <div>
+                <label class="label" for="country">Country</label>
+                <input id="country" v-model="form.country" class="input" placeholder="Portugal" required />
+              </div>
             </div>
-          </div>
+          </template>
+          <template v-else>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label class="label" for="lat">Latitude</label>
+                <input id="lat" v-model="form.lat" class="input" type="number" step="any" min="-90" max="90" placeholder="38.711046" required />
+              </div>
+              <div>
+                <label class="label" for="lng">Longitude</label>
+                <input id="lng" v-model="form.lng" class="input" type="number" step="any" min="-180" max="180" placeholder="-9.139968" required />
+              </div>
+            </div>
+            <p class="text-xs text-slate-500">Decimal degrees (WGS84). Tip: right-click a spot in Google Maps to copy coordinates.</p>
+          </template>
           <div class="flex flex-wrap items-center gap-3 pt-2">
-            <LoadingButton :loading="store.loading" type="submit" variant="primary">
+            <LoadingButton :loading="store.loading" :disabled="!canSubmit" type="submit" variant="primary">
               Discover candidates →
             </LoadingButton>
-            <button type="button" class="btn-secondary" @click="useExample">Use example address</button>
+            <button type="button" class="btn-secondary" @click="useExample">
+              Use example {{ mode === 'address' ? 'address' : 'coordinates' }}
+            </button>
           </div>
         </form>
       </div>

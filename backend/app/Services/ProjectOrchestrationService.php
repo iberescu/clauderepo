@@ -29,7 +29,9 @@ final class ProjectOrchestrationService
     public function createProject(ProjectInput $input): string
     {
         $createdAt = new \DateTimeImmutable('now');
-        $projectId = Slug::projectId($input->street, $input->city, $input->country, $createdAt);
+        $projectId = $input->hasCoordinates() && $input->street === '' && $input->city === '' && $input->country === ''
+            ? Slug::projectIdFromCoords((float) $input->lat, (float) $input->lng, $createdAt)
+            : Slug::projectId($input->street, $input->city, $input->country, $createdAt);
 
         // Collisions are rare (second precision) but possible in tests.
         $suffix = 1;

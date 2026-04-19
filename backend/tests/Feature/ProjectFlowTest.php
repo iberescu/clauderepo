@@ -80,6 +80,36 @@ class ProjectFlowTest extends TestCase
             ->assertStatus(500);
     }
 
+    public function test_create_project_accepts_coordinates_without_address(): void
+    {
+        $response = $this->postJson('/api/v1/projects', [
+            'lat' => 38.711046,
+            'lng' => -9.139968,
+        ])->assertCreated();
+
+        $projectId = $response->json('data.project_id');
+        $this->assertStringContainsString('coord-', $projectId);
+
+        $this->assertSame(38.711046, $response->json('data.normalized_query.center_lat'));
+        $this->assertSame(-9.139968, $response->json('data.normalized_query.center_lng'));
+        $this->assertEquals(1.0, $response->json('data.normalized_query.confidence'));
+        $this->assertCount(12, $response->json('data.candidates'));
+    }
+
+    public function test_create_project_rejects_partial_coordinates(): void
+    {
+        $this->postJson('/api/v1/projects', ['lat' => 38.71])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['lng']);
+    }
+
+    public function test_create_project_rejects_out_of_range_coordinates(): void
+    {
+        $this->postJson('/api/v1/projects', ['lat' => 120.0, 'lng' => 0.0])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['lat']);
+    }
+
     public function test_show_endpoint_reflects_saved_files(): void
     {
         $projectId = $this->postJson('/api/v1/projects', [

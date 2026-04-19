@@ -23,4 +23,19 @@ final class Slug
 
         return "{$stamp}_{$slug}";
     }
+
+    public static function projectIdFromCoords(float $lat, float $lng, ?\DateTimeImmutable $at = null): string
+    {
+        $at = $at ?? new \DateTimeImmutable('now');
+        $stamp = $at->format('Ymd_His');
+        $slug  = 'coord-'.self::coordPart($lat).'-'.self::coordPart($lng);
+
+        return "{$stamp}_{$slug}";
+    }
+
+    private static function coordPart(float $v): string
+    {
+        $sign = $v < 0 ? 'n' : 'p';
+        return $sign.str_replace('.', 'p', number_format(abs($v), 5, '.', ''));
+    }
 }

@@ -27,9 +27,15 @@ final class FakeGeoSearchService implements GeoSearchServiceInterface
     {
         $this->status->progress($projectId, 'geo.resolve start (fake)');
 
-        [$lat, $lng] = $this->pointFor($input);
+        if ($input->hasCoordinates()) {
+            [$lat, $lng] = [(float) $input->lat, (float) $input->lng];
+        } else {
+            [$lat, $lng] = $this->pointFor($input);
+        }
 
-        $formatted = trim(sprintf('%s, %s, %s', $input->street, $input->city, $input->country), ', ');
+        $formatted = $input->street !== '' || $input->city !== '' || $input->country !== ''
+            ? trim(sprintf('%s, %s, %s', $input->street, $input->city, $input->country), ', ')
+            : sprintf('%.6f, %.6f', $lat, $lng);
         $query = new NormalizedQuery(
             street: $input->street,
             city: $input->city,
@@ -37,7 +43,7 @@ final class FakeGeoSearchService implements GeoSearchServiceInterface
             formattedAddress: $formatted,
             centerLat: $lat,
             centerLng: $lng,
-            confidence: 0.90,
+            confidence: $input->hasCoordinates() ? 1.0 : 0.90,
             placeId: 'fake_'.substr(sha1($formatted), 0, 16),
             provider: 'fake',
         );

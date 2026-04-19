@@ -27,6 +27,10 @@ final class GoogleGeoSearchService implements GeoSearchServiceInterface
 
     public function resolve(string $projectId, ProjectInput $input): NormalizedQuery
     {
+        if ($input->hasCoordinates()) {
+            return $this->fromCoordinates($projectId, $input);
+        }
+
         $key = (string) config('solar.google.maps_api_key');
         if ($key === '') {
             throw new RuntimeException('GOOGLE_MAPS_API_KEY missing; set FAKE_PROVIDERS=true for offline mode.');
@@ -80,5 +84,32 @@ final class GoogleGeoSearchService implements GeoSearchServiceInterface
             'GEOMETRIC_CENTER'    => 0.65,
             default               => 0.45,
         };
+    }
+
+    private function fromCoordinates(string $projectId, ProjectInput $input): NormalizedQuery
+    {
+        $lat = (float) $input->lat;
+        $lng = (float) $input->lng;
+        $formatted = $input->street !== '' || $input->city !== '' || $input->country !== ''
+            ? trim(sprintf('%s, %s, %s', $input->street, $input->city, $input->country), ', ')
+            : sprintf('%.6f, %.6f', $lat, $lng);
+
+        $this->projects->writeText($projectId, 'input/geocode_raw.txt',
+            "# coordinates supplied directly; geocoding skipped\n".
+            "lat: {$lat}\nlng: {$lng}\n"
+        );
+        $this->status->apiCall($projectId, 'google.geocode', 0, 0.0, 'skipped=coords_supplied');
+
+        return new NormalizedQuery(
+            street: $input->street,
+            city: $input->city,
+            country: $input->country,
+            formattedAddress: $formatted,
+            centerLat: $lat,
+            centerLng: $lng,
+            confidence: 1.0,
+            placeId: '',
+            provider: 'google',
+        );
     }
 }
