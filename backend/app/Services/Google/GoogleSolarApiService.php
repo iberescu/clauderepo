@@ -148,15 +148,34 @@ final class GoogleSolarApiService implements SolarApiServiceInterface
         if (!is_string($url) || $url === '') {
             return null;
         }
+
+        // Google's Data Layers URLs include an already-percent-encoded `id=`
+        // query value. Passing a query array to Laravel's HTTP client makes
+        // Guzzle re-parse and re-encode the URL, which mangles that id and
+        // triggers a 400 from the geoTiff endpoint. Append the API key with
+        // string concatenation so the original URL is passed through
+        // unchanged.
+        $separator = str_contains($url, '?') ? '&' : '?';
+        $fullUrl   = $url.$separator.'key='.rawurlencode($key);
+
         $started = microtime(true);
         try {
-            $resp = $this->http->timeout(60)->get($url, ['key' => $key]);
+            $resp = $this->http->timeout(60)->get($fullUrl);
         } catch (Throwable $e) {
             $this->status->error($projectId, "solar.imagery {$label} fetch failed", $e);
             return null;
         }
         $duration = (microtime(true) - $started) * 1000;
-        $this->status->apiCall($projectId, "google.dataLayers.{$label}", $resp->status(), $duration);
+
+        $note = '';
+        if (!$resp->ok()) {
+            $snippet = substr((string) $resp->body(), 0, 200);
+            $snippet = preg_replace('/\s+/', ' ', $snippet) ?? '';
+            $note = 'body='.$snippet;
+            $this->status->error($projectId, "solar.imagery {$label} returned HTTP ".$resp->status().': '.$snippet);
+        }
+        $this->status->apiCall($projectId, "google.dataLayers.{$label}", $resp->status(), $duration, $note);
+
         if (!$resp->ok()) {
             return null;
         }

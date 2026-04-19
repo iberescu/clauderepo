@@ -7,21 +7,37 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Repositories\ProjectFileRepository;
 use App\Services\RenderingService;
+use App\Services\StatusFileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
+use Throwable;
 
 class RenderController extends Controller
 {
     public function __construct(
         private readonly RenderingService $rendering,
         private readonly ProjectFileRepository $projects,
+        private readonly StatusFileService $status,
     ) {
     }
 
     public function generate(string $projectId): JsonResponse
     {
         $this->ensureExists($projectId);
-        $notes = $this->rendering->generate($projectId);
+        try {
+            $notes = $this->rendering->generate($projectId);
+        } catch (Throwable $e) {
+            // Surface the real reason in both the project's errors.txt (so it
+            // shows up in the View logs drawer) and the HTTP response body.
+            $this->status->error($projectId, 'render.generate failed', $e);
+            return response()->json([
+                'message' => 'render.generate failed: '.$e->getMessage(),
+                'error'   => [
+                    'type'    => get_class($e),
+                    'message' => $e->getMessage(),
+                ],
+            ], 500);
+        }
         return response()->json(['data' => $this->payload($projectId, $notes)]);
     }
 
