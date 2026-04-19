@@ -248,15 +248,12 @@ PROMPT;
 
         return <<<PROMPT
 TASK: Generate a brand-new 3D PERSPECTIVE photograph of ONLY THE ROOFTOP of
-a house with solar panels on it. Do NOT show the walls, doors, windows,
-ground, driveway, yard, or neighbourhood. Do NOT return a top-down view.
-Do NOT return the supplied image with edits. Do NOT return anything that
-looks like a satellite or aerial-map image.
+a house with solar panels on it. Do NOT return the supplied image with edits. 
 
 The image I am giving you is a TOP-DOWN reference only. Its sole purpose
 is to show you where the dark-blue solar panels sit on the rooftop. You
-must reimagine the rooftop entirely as a low-altitude 3D perspective
-photograph, cropped so that only the roof is visible in frame.
+must reimagine the rooftop entirely as a low-altitude satelite perspective
+photograph. Offer a small 3d perspective.
 
 EXACT PANEL COUNT (strict — must match):
   - Total panels to depict: {$totalPanels}
@@ -268,36 +265,20 @@ EXACT PANEL COUNT (strict — must match):
     above. Do not add extra rows, extra columns, or extra panels to make
     the array look symmetric.
 
-COMPOSITION (strict):
-  - Camera at roughly 15-20 metres above roof level, looking DOWN at the
-    roof at about a 35-45 degree angle (NOT 90° / top-down, NOT isometric,
-    NOT orthographic).
-  - Camera positioned off to one side so TWO roof planes (ridge + slope)
-    are visible and the pitch of the roof reads as a real 3D surface.
-  - ONLY THE ROOFTOP is in frame. Crop tightly so the edges of the roof
-    meet the edges of the image, or sit against a soft neutral backdrop
-    (sky only, or blurred out-of-focus background). No walls, no gutters
-    extending down the facade, no chimneys of neighbouring houses, no
-    ground.
 
 WHAT TO DEPICT:
   - A pitched rooftop (tiled or shingled) seen from above at an angle.
   - Dark-blue monocrystalline solar panels with silver frames mounted
     flush on the roof, in the same grid pattern and EXACT count as the
-    reference (see EXACT PANEL COUNT above).
-  - Warm late-afternoon sunlight from the upper left, realistic shadows
-    cast by the panels onto the roof surface, subtle sky reflections on
-    the panel glass.
+    reference (see EXACT PANEL COUNT above). Rotate the panels so they fit on the rooftop.
 
 STYLE:
-  - Photorealistic, as if shot with a DSLR from a drone hovering just
-    above the roof ridge.
+  - Photorealistic, as if shot with a DSLR from a drone hovering
+    above the roof.
   - Marketing-quality, suitable for a solar-installation sales proposal.
 
 REJECTION CRITERIA — if your output shows any of these, you have failed
 the task:
-  - A top-down / bird's-eye / orthographic / satellite-style view.
-  - Walls, windows, doors, ground, driveway, yard, or full-house views.
   - A panel count different from {$totalPanels}.
   - The input image with panels drawn on it.
   - A flat 2D diagram or schematic.
