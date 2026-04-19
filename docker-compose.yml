@@ -7,8 +7,11 @@
 # host-side DNS tricks are needed.
 #
 # With FAKE_PROVIDERS=true the stack runs end-to-end offline. To exercise the
-# real Google Maps / Solar API / Gemini providers, export the three keys in
-# your shell and set FAKE_PROVIDERS=false before starting the stack.
+# real Google Maps / Solar API / Gemini providers, copy .env.example (next to
+# this file) to .env and fill in the three keys plus FAKE_PROVIDERS=false.
+# `docker compose` auto-loads that .env for ${VAR} substitution below; editing
+# backend/.env alone will NOT work because docker-compose env values win over
+# Laravel's dotenv file at runtime.
 
 services:
   backend:
