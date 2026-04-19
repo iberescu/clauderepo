@@ -70,7 +70,7 @@ final class RenderingService
             "  segments: ".count($layout->segments)."\n";
 
         try {
-            $result = $this->gemini->enhance($overlayPng, $prompt);
+            $result = $this->geminiEnhance($projectId, 'gemini.enhance_top_down', $overlayPng, $prompt);
             $this->projects->writeBinary($projectId, 'render/roof_render.png', $result['bytes']);
             $renderNotes .= "\nenhanced:\n".$result['notes'];
             $this->status->progress($projectId, 'render.enhance ok bytes='.strlen($result['bytes']));
@@ -83,7 +83,7 @@ final class RenderingService
         $prompt3d = $this->prompt3d();
         $this->projects->writeText($projectId, 'render/gemini_prompt_3d.txt', $prompt3d);
         try {
-            $result3d = $this->gemini->enhance($overlayPng, $prompt3d);
+            $result3d = $this->geminiEnhance($projectId, 'gemini.enhance_synthetic_3d', $overlayPng, $prompt3d);
             $this->projects->writeBinary($projectId, 'render/roof_render_3d.png', $result3d['bytes']);
             $renderNotes .= "\nenhanced_3d:\n".$result3d['notes'];
             $this->status->progress($projectId, 'render.enhance_3d ok bytes='.strlen($result3d['bytes']));
@@ -187,7 +187,7 @@ final class RenderingService
     {
         $outFile = 'render/'.$label.'_render_3d.png';
         try {
-            $result = $this->gemini->enhance($overlayPng, $prompt);
+            $result = $this->geminiEnhance($projectId, "gemini.enhance_{$label}_3d", $overlayPng, $prompt);
             $this->projects->writeBinary($projectId, $outFile, $result['bytes']);
             $this->status->progress($projectId, "render.enhance_3d {$label} ok bytes=".strlen($result['bytes']));
             return "\n{$label}_3d:\n".$result['notes'];
@@ -195,6 +195,28 @@ final class RenderingService
             $this->status->error($projectId, "render.enhance_3d {$label} failed, falling back to overlay", $e);
             $this->projects->writeBinary($projectId, $outFile, $overlayPng);
             return "\n{$label}_3d:\n  renderer: fallback_overlay\n  error: ".$e->getMessage()."\n";
+        }
+    }
+
+    /**
+     * Thin wrapper around the Gemini client that records duration, HTTP-style
+     * status and result bytes to the project's api_calls.txt log so the "View
+     * logs" button can display each enhancement pass.
+     *
+     * @return array{bytes: string, notes: string}
+     */
+    private function geminiEnhance(string $projectId, string $label, string $overlayPng, string $prompt): array
+    {
+        $started = microtime(true);
+        try {
+            $result = $this->gemini->enhance($overlayPng, $prompt);
+            $duration = (microtime(true) - $started) * 1000;
+            $this->status->apiCall($projectId, $label, 200, $duration, 'bytes='.strlen($result['bytes']));
+            return $result;
+        } catch (Throwable $e) {
+            $duration = (microtime(true) - $started) * 1000;
+            $this->status->apiCall($projectId, $label, 500, $duration, 'error='.substr($e->getMessage(), 0, 80));
+            throw $e;
         }
     }
 

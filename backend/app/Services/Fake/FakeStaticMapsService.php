@@ -6,6 +6,7 @@ namespace App\Services\Fake;
 
 use App\Services\Contracts\StaticMapsServiceInterface;
 use App\Services\Google\GoogleStaticMapsService;
+use App\Services\StatusFileService;
 
 /**
  * Deterministic stand-in for Google Static Maps. Renders a tiled "satellite"
@@ -14,6 +15,10 @@ use App\Services\Google\GoogleStaticMapsService;
  */
 final class FakeStaticMapsService implements StaticMapsServiceInterface
 {
+    public function __construct(private readonly StatusFileService $status)
+    {
+    }
+
     public function fetchSatelliteTile(
         string $projectId,
         float $lat,
@@ -60,6 +65,8 @@ final class FakeStaticMapsService implements StaticMapsServiceInterface
         imagepng($img);
         $bytes = (string) ob_get_clean();
         imagedestroy($img);
+
+        $this->status->apiCall($projectId, 'fake.staticMaps', 200, 0.0, "zoom={$zoom}");
 
         return [
             'bytes'            => $bytes,

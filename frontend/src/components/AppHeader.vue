@@ -1,5 +1,13 @@
 <script setup>
+import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { useProjectStore } from '@/stores/project'
+import LogsDrawer from '@/components/LogsDrawer.vue'
+
+const store = useProjectStore()
+const { id: projectId } = storeToRefs(store)
+const logsOpen = ref(false)
 </script>
 
 <template>
@@ -19,6 +27,17 @@ import { RouterLink } from 'vue-router'
         </div>
       </RouterLink>
       <nav class="flex items-center gap-1 text-sm">
+        <button
+          v-if="projectId"
+          type="button"
+          class="px-3 py-1.5 rounded-md text-slate-600 hover:text-brand-700 hover:bg-brand-50 flex items-center gap-1.5"
+          @click="logsOpen = true"
+        >
+          <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 6h16M4 12h16M4 18h10" stroke-linecap="round" />
+          </svg>
+          View logs
+        </button>
         <RouterLink
           to="/"
           active-class="bg-brand-50 text-brand-700"
@@ -32,5 +51,6 @@ import { RouterLink } from 'vue-router'
         >Settings</RouterLink>
       </nav>
     </div>
+    <LogsDrawer :open="logsOpen" :project-id="projectId" @close="logsOpen = false" />
   </header>
 </template>

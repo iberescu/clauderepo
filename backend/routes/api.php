@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\BuildingController;
 use App\Http\Controllers\Api\V1\CandidateController;
 use App\Http\Controllers\Api\V1\LayoutController;
+use App\Http\Controllers\Api\V1\LogsController;
 use App\Http\Controllers\Api\V1\PricingController;
 use App\Http\Controllers\Api\V1\ProjectController;
 use App\Http\Controllers\Api\V1\ProposalController;
@@ -41,6 +42,8 @@ Route::prefix('v1')->group(function () {
     Route::get('/projects/{projectId}/proposal', [ProposalController::class, 'show']);
     Route::get('/projects/{projectId}/proposal/html', [ProposalController::class, 'html']);
     Route::get('/projects/{projectId}/proposal/pdf', [ProposalController::class, 'pdf']);
+
+    Route::get('/projects/{projectId}/logs', [LogsController::class, 'show']);
 
     Route::get('/settings', [SettingsController::class, 'index']);
     Route::post('/settings', [SettingsController::class, 'update']);

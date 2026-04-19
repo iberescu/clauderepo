@@ -52,6 +52,8 @@ export const api = {
   proposalHtmlUrl:      (id)           => `/api/v1/projects/${id}/proposal/html`,
   proposalPdfUrl:       (id)           => `/api/v1/projects/${id}/proposal/pdf`,
 
+  projectLogs:          (id)           => data(client.get(`/projects/${id}/logs`)),
+
   getSettings:          ()             => data(client.get('/settings')),
   updateSettings:       (section, values) => data(client.post('/settings', { section, values })),
 }
